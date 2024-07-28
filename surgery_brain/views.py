@@ -2,8 +2,7 @@
 from django.http import HttpResponse
 import json
 from . import schedule2 as schedule
-from .Codes.doImportSurgery import do_import_surgery
-from .Codes.doRefreshSurgery import do_refresh_surgery
+from surgery_brain.doImportSurgery import do_import_surgery
 
 from common.logger import Logger
 
@@ -17,17 +16,10 @@ def get_first_schedule(request):
 
         logger.info("import the surgery and  case_date: " + case_date)
         do_import_surgery(date=case_date)
-        do_refresh_surgery(fresh_date=case_date)
         logger.info("import the surgery is done")
 
         logger.info("first schedule and  case_date: " + case_date)
         my_schedule = schedule.Schedule(schedule_date=case_date)
-
-        # logger.info("pre first schedule")
-        # my_schedule.pre_first_schedule()
-        #
-        # logger.info("do first schedule")
-        # result.append(my_schedule.do_first_schedule())
 
         my_schedule.run()
 

@@ -49,3 +49,6 @@ log.txt
 tmp/
 .tmp/
 mysql/
+
+
+*.pyc
