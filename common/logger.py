@@ -8,7 +8,7 @@ class Logger:
     def __init__(self, name, level=logging.INFO):
         self.logger = logging.getLogger(name)
         self.logger.setLevel(level)
-        log_file = "./logs/" + time.strftime("%Y-%m-%d-%H-%M-%S", time.localtime()) + ".log"
+        log_file = "./logs/" + time.strftime("%Y-%m-%d", time.localtime()) + ".log"
 
         if not self.logger.handlers:
             console_handler = logging.StreamHandler()
