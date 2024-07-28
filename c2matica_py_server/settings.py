@@ -84,15 +84,24 @@ MYSQL_USERNAME = 'root'
 MYSQL_PASSWORD = 'C2matica!'
 MYSQL_HOST = '192.170.201.161'
 MYSQL_PORT = '3306'
+
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.mysql',
+#         'NAME': MYSQL_DATABASE,
+#         'USER': MYSQL_USERNAME,
+#         'PASSWORD': MYSQL_PASSWORD,
+#         'HOST': MYSQL_HOST,
+#         'PORT': MYSQL_PORT,
+#         'OPTIONS': {'charset': 'utf8mb4'}
+#     }
+# }
+
+
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': MYSQL_DATABASE,
-        'USER': MYSQL_USERNAME,
-        'PASSWORD': MYSQL_PASSWORD,
-        'HOST': MYSQL_HOST,
-        'PORT': MYSQL_PORT,
-        'OPTIONS': {'charset': 'utf8mb4'}
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': os.path.join(BASE_DIR, './tmp/mirror/mirror.db'),
     }
 }
 

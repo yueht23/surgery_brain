@@ -1,17 +1,11 @@
 # -*- coding: utf-8 -*-
 import pandas as pd
-import numpy as np
 import datetime
-import pulp
-import sqlite3
-from sqlalchemy import create_engine
 
 from c2matica_py_server.settings import MYSQL_HOST, MYSQL_USERNAME, MYSQL_PASSWORD, MYSQL_DATABASE
 from common.sql_util import *
 import pymysql
-import os
 from common.logger import Logger
-import io
 import re
 
 
@@ -54,175 +48,52 @@ class Schedule():
             return chinese2num[strWeekday]
 
     def __get_dept_seq_to_room_id(self):
-        csv = """weekday,dept,seq_alphabet,room_id,weight
-        1,产科,A,2619,1000
-        3,产科,A,2594,1000
-        4,产科,A,2594,1000
-        5,产科,A,2619,1000
-        1,创伤中心2,A,2595,1000
-        2,创伤中心2,A,2595,1000
-        3,创伤中心2,A,2595,1000
-        4,创伤中心2,A,2595,1000
-        1,胆胰外科,A,2613,1000
-        1,胆胰外科,B,2602,1000
-        1,肝脾外科,C,2602,1000
-        2,胆胰外科,A,2617,1000
-        3,胆胰外科,A,2613,1000
-        4,胆胰外科,A,2613,1000
-        5,胆胰外科,A,2613,1000
-        1,耳鼻咽喉头颈外科,A,2605,1000
-        2,耳鼻咽喉头颈外科,A,2605,1000
-        2,耳鼻咽喉头颈外科,B,2602,1000
-        3,耳鼻咽喉头颈外科,A,2605,1000
-        4,耳鼻咽喉头颈外科,A,2605,1000
-        4,耳鼻咽喉头颈外科,B,2602,1000
-        5,耳鼻咽喉头颈外科,A,2605,1000
-        5,耳鼻咽喉头颈外科,B,2602,1000
-        1,妇科,A,2607,1000
-        1,妇科,B,2600,1000
-        2,妇科,A,2607,1000
-        2,妇科,B,2600,1000
-        3,妇科,A,2607,1000
-        3,妇科,B,2600,1000
-        4,妇科,A,2607,1000
-        4,妇科,B,2600,1000
-        5,妇科,A,2607,1000
-        5,妇科,B,2600,1000
-        1,肝脾外科,A,2598,1000
-        1,肝脾外科,B,2602,1000
-        1,胆胰外科,C,2602,1000
-        2,肝脾外科,A,2598,1000
-        3,肝脾外科,A,2598,1000
-        4,肝脾外科,A,2598,1000
-        5,肝脾外科,A,2598,1000
-        5,肝脾外科,B,2616,1000
-        1,骨科创伤,A,2603,1000
-        2,骨科创伤,A,2603,1000
-        2,骨科创伤,B,2591,1000
-        2,神经外科,C,2591,1000
-        3,骨科创伤,A,2603,1000
-        3,骨科创伤,B,2619,1000
-        4,骨科创伤,A,2603,1000
-        5,骨科创伤,A,2595,1000
-        5,骨科创伤,B,2603,1000
-        1,骨科关节,A,2612,1000
-        2,骨科关节,A,2612,1000
-        2,骨科关节,B,2611,1000
-        3,骨科关节,A,2612,1000
-        4,骨科关节,A,2612,1000
-        5,骨科关节,A,2612,1000
-        1,骨科脊柱,A,2610,1000
-        1,骨科脊柱,B,2611,1000
-        2,骨科脊柱,A,2610,1000
-        2,骨科脊柱,B,2613,1000
-        3,骨科脊柱,A,2610,1000
-        3,骨科脊柱,B,2611,1000
-        4,骨科脊柱,A,2610,1000
-        4,骨科脊柱,B,2611,1000
-        5,骨科脊柱,A,2610,1000
-        5,骨科脊柱,B,2611,1000
-        1,骨科手足,A,2589,1000
-        1,骨科手足,B,2591,1000
-        2,骨科手足,A,2589,1000
-        3,骨科手足,A,2589,1000
-        4,骨科手足,A,2589,1000
-        5,骨科手足,A,2589,1000
-        2,口腔科,A,2592,1000
-        4,口腔科,A,2617,1000
-        1,泌尿外科,A,2608,1000
-        1,泌尿外科,B,2596,1000
-        1,泌尿外科,C,2616,1000
-        2,泌尿外科,A,2608,1000
-        2,泌尿外科,B,2596,1000
-        3,泌尿外科,A,2608,1000
-        3,泌尿外科,B,2596,1000
-        4,泌尿外科,A,2608,1000
-        4,泌尿外科,B,2596,1000
-        4,泌尿外科,C,2588,1000
-        4,泌尿外科,D,2616,1000
-        5,泌尿外科,A,2608,1000
-        5,泌尿外科,B,2596,1000
-        5,泌尿外科,C,2588,1000
-        2,男科,A,2623,0
-        1,普外甲乳外科,A,2586,1000
-        1,普外甲乳外科,B,2588,1000
-        2,普外甲乳外科,A,2586,1000
-        2,普外甲乳外科,B,2588,1000
-        3,普外甲乳外科,A,2586,1000
-        3,普外甲乳外科,B,2588,1000
-        3,普外甲乳外科,C,2623,0
-        4,普外甲乳外科,A,2586,1000
-        4,普外甲乳外科,B,2592,1000
-        4,普外甲乳外科,C,2623,0
-        5,普外甲乳外科,A,2586,1000
-        5,普外甲乳外科,B,2594,1000
-        1,普外疝儿外科,A,2617,1000
-        1,普外疝儿外科,B,2594,1000
-        3,普外疝儿外科,A,2617,1000
-        5,普外疝儿外科,A,2617,1000
-        2,普外血管外科,A,2587,1000
-        3,普外血管外科,A,2593,1000
-        4,普外血管外科,A,2587,1000
-        5,普外血管外科,A,2593,1000
-        1,神经外科,A,2587,1000
-        1,神经外科,B,2593,1000
-        2,神经外科,A,2591,1000
-        2,骨科创伤,C,2591,1000
-        2,神经外科,B,2593,1000
-        3,神经外科,A,2587,0
-        3,神经外科,B,2591,1000
-        4,神经外科,A,2591,1000
-        4,神经外科,B,2593,1000
-        5,神经外科,A,2591,1000
-        1,肾脏内科,A,2592,1000
-        3,肾脏内科,A,2592,1000
-        5,肾脏内科,A,2592,1000
-        1,胃肠中心,A,2609,1000
-        1,胃肠中心,B,2620,1000
-        2,胃肠中心,A,2609,1000
-        2,胃肠中心,B,2620,1000
-        2,胃肠中心,C,2594,1000
-        3,胃肠中心,A,2609,1000
-        3,胃肠中心,B,2620,1000
-        3,胃肠中心,C,2602,1000
-        3,胃肠中心,D,2616,1000
-        4,胃肠中心,A,2609,1000
-        4,胃肠中心,B,2620,1000
-        4,胃肠中心,C,2619,1000
-        5,胃肠中心,A,2609,1000
-        5,胃肠中心,B,2620,1000
-        3,心内科206,B,2587,2000
-        5,心脏大血管病中心,A,2587,1000
-        1,胸外科,A,2590,1000
-        1,胸外科,B,2614,1000
-        2,胸外科,A,2590,1000
-        2,胸外科,B,2614,1000
-        2,胸外科,C,2619,1000
-        2,胸外科,D,2616,1000
-        3,胸外科,A,2590,1000
-        3,胸外科,B,2614,1000
-        4,胸外科,A,2590,1000
-        4,胸外科,B,2614,1000
-        5,胸外科,A,2590,1000
-        5,胸外科,B,2614,1000
-        1,运动医学科,A,2604,1000
-        1,运动医学科,B,2623,1000
-        2,运动医学科,A,2604,1000
-        2,运动医学科,B,2623,2000
-        3,运动医学科,A,2604,1000
-        3,运动医学科,B,2623,2000
-        4,运动医学科,A,2604,1000
-        4,运动医学科,B,2623,2000
-        5,运动医学科,A,2604,1000
-        5,运动医学科,B,2623,1000
-        5,运动医学科,B,2623,1000
-        """
+        sql = """
+               SELECT 
+                    ss.department AS dept, 
+                    ss.surgery_room_sequence AS seq_alphabet, 
+                    ri.id AS room_id, 
+                    CASE
+                        WHEN ss.remarks LIKE '%优先排%' THEN 0
+                        WHEN ss.remarks LIKE '%往后排%' THEN 2000
+                        ELSE 1000
+                    END AS weight
+                FROM 
+                    surgery_schedule ss
+                JOIN 
+                    operating_room_info ri 
+                ON 
+                    ss.surgery_department LIKE CONCAT('%', ri.operating_department, '%') 
+                    AND 
+                    CAST(ss.surgery_room_name AS CHAR) = CAST(ri.real_name AS UNSIGNED)
+                WHERE 
+                    ss.week = '{}'
+            """.format(self.weekday)
 
-        df = pd.read_csv(io.StringIO(csv), dtype={"weekday": int, "room_id": int, "weight": int})
-        df = df.loc[df["weekday"] == self.weekday]
-        # drop the weekday column
-        df = df.drop(columns=["weekday"])
+        df = pd.DataFrame(query_all_dict(sql))
 
+        # dealing with 、problem
+        extended = []
+        for row in df.itertuples():
+            dept = row.dept
+            seq_alphabet = row.seq_alphabet
+            room_id = row.room_id
+            weight = row.weight
+
+            # the number of 、 in seq_alphabet and dept should be the same and less than 1
+            assert seq_alphabet.count('、') == dept.count('、') and seq_alphabet.count('、') <= 1
+
+            if '、' in seq_alphabet:
+                dept_1, dept_2 = dept.split('、')
+                seq_1, seq_2 = seq_alphabet.split('、')
+                extended.append([dept_1, seq_1, room_id, weight])
+                extended.append([dept_2, seq_2, room_id, weight])
+            else:
+                extended.append([dept, seq_alphabet, room_id, weight])
+
+        df = pd.DataFrame(extended, columns=['dept', 'seq_alphabet', 'room_id', 'weight'])
+        # set the dtype of columns
+        df = df.astype({'dept': str, 'seq_alphabet': str, 'room_id': int, 'weight': int})
         self.logger.info("当前星期{},当前星期的手术室分配为:\n{}".format(self.weekday, df))
         return df
 
@@ -303,8 +174,7 @@ class Schedule():
             application = {'id': row['id'],
                            'doctor': row['doctor'],
                            'dept': row['dept'],
-                           'duration': round(row['duration']), # 向上取整
-                           # 'duration': float(row['duration']),
+                           'duration': round(float(row['duration'])),  # 向上取整
                            # 分解手术序列，A1->A,1
                            'seq_alphabet': row['seq'][0],
                            'seq_number': int(row['seq'][1:])

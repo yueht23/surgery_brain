@@ -18,6 +18,7 @@ target/
 *.iws
 *.iml
 *.ipr
+*.pyc
 
 ### NetBeans ###
 /nbproject/private/
@@ -44,6 +45,7 @@ log.txt
 *.spec
 
 
-## ignor the tmp files
+## ignor the untracked folders
 tmp/
 .tmp/
+mysql/
