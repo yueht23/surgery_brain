@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
 import pandas as pd
 import datetime
-
-from c2matica_py_server.settings import MYSQL_HOST, MYSQL_USERNAME, MYSQL_PASSWORD, MYSQL_DATABASE
 from common.sql_util import *
 import pymysql
 from common.logger import Logger
 import re
+from django.db import connection as django_connection
 
 
 class Schedule():
@@ -265,10 +264,7 @@ class Schedule():
                                            application["id"],
                                            self.strf_date)
 
-                conn = pymysql.connect(host=MYSQL_HOST,
-                                       user=MYSQL_USERNAME,
-                                       password=MYSQL_PASSWORD,
-                                       database=MYSQL_DATABASE, charset="utf8")
+                conn = django_connection
                 cursor = conn.cursor()
                 cursor.execute(sql)
                 conn.commit()

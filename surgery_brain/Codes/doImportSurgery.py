@@ -1,13 +1,9 @@
 import pandas as pd
-import sqlite3
 import datetime
 import numpy as np
 import time
-from sqlalchemy import create_engine
 from common.logger import Logger
-from c2matica_py_server.settings import MYSQL_HOST, MYSQL_USERNAME, MYSQL_PASSWORD, MYSQL_DATABASE
-from common.sql_util import *
-import os
+from common.sql_util import query_all_dict, get_sqlalchemy_engine
 
 pd.set_option("display.max_columns", None)
 
@@ -136,150 +132,71 @@ def doGenerateAdditionalData(df):
     return df
 
 
-def doImportSurgery(df, date):
-    sql = """
-    select pseudo_operation_data,
-           application_number,
-           hospital_serial_number,
-           admission_number,
-           patient_name,
-           operation_type,
-           surgeon,
-           doctor_department,
-           apply_department,
-           operation_name,
-           surgical_coding,
-           estimated_duration_operation,
-           table_sequence,
-           mode_anesthesia,
-           whether_operating,
-           whether_special_operation,
-           has_arranged,
-           second_round_scheduling_weight,
-           arrange_operating_room_number,
-           arrange_operating_number,
-           arrange_operating_room,
-          -- number_failed_order_grabs,
-           submission_time,
-           surgery,
-           robot,
-           interventional_operation,
-           perspective,
-           holmium_laser,
-           select_operating_room1,
-           select_operating_room2,
-           select_operating_room3,
-           select_operating_room4,
-           select_operating_room5,
-           select_operating_room6,
-           select_operating_room7,
-           select_operating_room8,
-           select_operating_room9,
-           select_operating_room10,
-           select_operating_room11,
-           select_operating_room12,
-           select_operating_room13,
-           select_operating_room14,
-           select_operating_room15,
-           select_operating_room16,
-           select_operating_room17,
-           select_operating_room18,
-           select_operating_room19,
-           select_operating_room20,
-           select_operating_room21,
-           select_operating_room22,
-           select_operating_room23,
-           select_operating_room24,
-           select_operating_room25,
-           select_operating_room26,
-           select_operating_room27,
-           select_operating_room28,
-           select_operating_room29,
-           select_operating_room30
-    from surgicalapplicationinfo
-    where pseudo_operation_data like '{}%'
-        """.format(date)
-    data = pd.DataFrame(query_all_dict(sql), dtype=str)
+def doImportSurgery(df):
+    rename_dict = {'拟手术日期': 'pseudo_operation_data',
+                   '申请号': 'application_number',
+                   '住院流水号': 'hospital_serial_number',
+                   '住院号': 'admission_number',
+                   '患者姓名': 'patient_name',
+                   '手术类别': 'operation_type',
+                   '主刀医生': 'surgeon',
+                   '医生科室': 'doctor_department',
+                   '申请科室': 'apply_department',
+                   '手术名称': 'operation_name',
+                   '手术编码': 'surgical_coding',
+                   '预估手术时长': 'estimated_duration_operation',
+                   '台序': 'table_sequence',
+                   '麻醉方式': 'mode_anesthesia',
+                   '是否有手术日': 'whether_operating',
+                   '是否为特殊手术': 'whether_special_operation',
+                   '是否已安排': 'has_arranged',
+                   '二轮排程权重': 'second_round_scheduling_weight',
+                   '安排手术间编号': 'arrange_operating_room_number',
+                   '安排手术部': 'arrange_operating_number',
+                   '安排手术间': 'arrange_operating_room',
+                   '是否日间手术': 'surgery',
+                   '机器人': 'robot',
+                   '介入手术': 'interventional_operation',
+                   '透视': 'perspective',
+                   '钬激光': 'holmium_laser',
+                   '提交申请时间': 'submission_time',
+                   '选择手术间1': 'select_operating_room1',
+                   '选择手术间2': 'select_operating_room2',
+                   '选择手术间3': 'select_operating_room3',
+                   '选择手术间4': 'select_operating_room4',
+                   '选择手术间5': 'select_operating_room5',
+                   '选择手术间6': 'select_operating_room6',
+                   '选择手术间7': 'select_operating_room7',
+                   '选择手术间8': 'select_operating_room8',
+                   '选择手术间9': 'select_operating_room9',
+                   '选择手术间10': 'select_operating_room10',
+                   '选择手术间11': 'select_operating_room11',
+                   '选择手术间12': 'select_operating_room12',
+                   '选择手术间13': 'select_operating_room13',
+                   '选择手术间14': 'select_operating_room14',
+                   '选择手术间15': 'select_operating_room15',
+                   '选择手术间16': 'select_operating_room16',
+                   '选择手术间17': 'select_operating_room17',
+                   '选择手术间18': 'select_operating_room18',
+                   '选择手术间19': 'select_operating_room19',
+                   '选择手术间20': 'select_operating_room20',
+                   '选择手术间21': 'select_operating_room21',
+                   '选择手术间22': 'select_operating_room22',
+                   '选择手术间23': 'select_operating_room23',
+                   '选择手术间24': 'select_operating_room24',
+                   '选择手术间25': 'select_operating_room25',
+                   '选择手术间26': 'select_operating_room26',
+                   '选择手术间27': 'select_operating_room27',
+                   '选择手术间28': 'select_operating_room28',
+                   '选择手术间29': 'select_operating_room29',
+                   '选择手术间30': 'select_operating_room30'
+                   }
 
-    conn = create_engine('mysql://' +
-                         MYSQL_USERNAME +
-                         ':' +
-                         MYSQL_PASSWORD +
-                         '@' +
-                         MYSQL_HOST + ':' + os.environ.get('MYSQL_PORT', '3306') + '/' +
-                         MYSQL_DATABASE +
-                         '?charset=utf8')
-
-    # print(df.columns)
-    df.columns = [
-        'pseudo_operation_data',
-        'application_number',
-        'hospital_serial_number',
-        'admission_number',
-        'patient_name',
-        'operation_type',
-        'surgeon',
-        'doctor_department',
-        'apply_department',
-        'operation_name',
-        'surgical_coding',
-        'estimated_duration_operation',
-        'table_sequence',
-        'mode_anesthesia',
-        'whether_operating',
-        'whether_special_operation',
-        'has_arranged',
-        'second_round_scheduling_weight',
-        'arrange_operating_room_number',
-        'arrange_operating_number',
-        'arrange_operating_room',
-        # 'number_failed_order_grabs',
-        'surgery',
-        'robot',
-        'interventional_operation',
-        'perspective',
-        'holmium_laser',
-        'submission_time',
-        'select_operating_room1',
-        'select_operating_room2',
-        'select_operating_room3',
-        'select_operating_room4',
-        'select_operating_room5',
-        'select_operating_room6',
-        'select_operating_room7',
-        'select_operating_room8',
-        'select_operating_room9',
-        'select_operating_room10',
-        'select_operating_room11',
-        'select_operating_room12',
-        'select_operating_room13',
-        'select_operating_room14',
-        'select_operating_room15',
-        'select_operating_room16',
-        'select_operating_room17',
-        'select_operating_room18',
-        'select_operating_room19',
-        'select_operating_room20',
-        'select_operating_room21',
-        'select_operating_room22',
-        'select_operating_room23',
-        'select_operating_room24',
-        'select_operating_room25',
-        'select_operating_room26',
-        'select_operating_room27',
-        'select_operating_room28',
-        'select_operating_room29',
-        'select_operating_room30'
-    ]
+    df.rename(columns=rename_dict, inplace=True)
     logger = Logger(__name__).get_logger()
     logger.info("df shape:{}".format(df.shape))
-
-    if data.size != 0:
-        data.to_sql('surgicalapplicationinfo_python', conn, if_exists='replace', index=False)
-    df.to_sql('surgicalapplicationinfo_python', conn, if_exists='replace', index=False)
-    # print(df.columns)
-    # conn = sqlite3.connect(db_file)
-    # df.to_sql('手术申请信息', conn, if_exists='replace', index=False)
+    if not df.empty:
+        df.to_sql('surgicalapplicationinfo_python', get_sqlalchemy_engine(), if_exists='replace', index=False)
 
 
 def do_import_surgery(date):
@@ -346,4 +263,4 @@ def do_import_surgery(date):
     surgeryTable = doGenerateAdditionalData(surgeryTable)
     logger.info("surgeryTable shape:{}".format(surgeryTable.shape))
 
-    doImportSurgery(surgeryTable, date)
+    doImportSurgery(surgeryTable)
