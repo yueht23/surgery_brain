@@ -1,11 +1,14 @@
 import logging
 from logging.handlers import RotatingFileHandler
 
+import time
+
 
 class Logger:
-    def __init__(self, name, log_file="./logs/log.txt", level=logging.INFO):
+    def __init__(self, name, level=logging.INFO):
         self.logger = logging.getLogger(name)
         self.logger.setLevel(level)
+        log_file = "./logs/" + time.strftime("%Y-%m-%d-%H-%M-%S", time.localtime()) + ".log"
 
         if not self.logger.handlers:
             console_handler = logging.StreamHandler()
