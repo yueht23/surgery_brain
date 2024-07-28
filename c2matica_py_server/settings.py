@@ -15,7 +15,6 @@ import os
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/2.2/howto/deployment/checklist/
 
@@ -26,7 +25,6 @@ SECRET_KEY = 'x#1o5)z5(0teyo2+gkvl#!ntjhqsld0())qlzt-x+ub4h3xz&^'
 DEBUG = (str(os.environ.get('DJANGO_DEBUG', True)) == 'True')
 
 ALLOWED_HOSTS = ['*']
-
 
 # Application definition
 
@@ -71,10 +69,17 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'c2matica_py_server.wsgi.application'
 
-
 # Database
 # https://docs.djangoproject.com/en/2.2/ref/settings/#databases
+"""
+业务环境
+"""
+# MYSQL_DATABASE = 'zhihuishoshudanao'
+"""
+测试环境
+"""
 MYSQL_DATABASE = 'abc'
+
 MYSQL_USERNAME = 'root'
 MYSQL_PASSWORD = 'C2matica!'
 MYSQL_HOST = '192.170.201.161'
@@ -90,7 +95,6 @@ DATABASES = {
         'OPTIONS': {'charset': 'utf8mb4'}
     }
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/2.2/ref/settings/#auth-password-validators
@@ -109,7 +113,6 @@ AUTH_PASSWORD_VALIDATORS = [
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
 ]
-
 
 # Internationalization
 # https://docs.djangoproject.com/en/2.2/topics/i18n/
@@ -150,6 +153,5 @@ LOGGING = {
         },
     }
 }
-
 
 CRONTAB_COMMAND_PREFIX = 'LANG_ALL=zh_cn.UTF-8'

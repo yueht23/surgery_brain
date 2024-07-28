@@ -42,3 +42,8 @@ log.txt
 
 ## .spec files ###
 *.spec
+
+
+## ignor the tmp files
+tmp/
+.tmp/
