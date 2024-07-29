@@ -23,22 +23,20 @@ def query_all_dict(sql, params=None):
         return rowList
 
 
-def query_one_dict(sql, params=None):
-    """
-    查询一个结果返回字典类型数据
+def execute_sql(sql, params=None):
+    '''
+    执行sql语句
     :param sql:
     :param params:
     :return:
-    """
+    '''
+    assert "select" not in sql.lower(), "This function is for executing non-select sql"
     with connection.cursor() as cursor:
         if params:
             cursor.execute(sql, params=params)
         else:
             cursor.execute(sql)
-        col_names = [desc[0] for desc in cursor.description]
-        row = cursor.fetchone()
-        tMap = dict(zip(col_names, row))
-        return tMap
+        return cursor.rowcount
 
 
 def get_sqlalchemy_engine(database='default'):
