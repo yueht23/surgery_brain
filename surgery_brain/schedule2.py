@@ -165,7 +165,7 @@ class Schedule():
             from 
                 surgicalapplicationinfo_python
             where
-                pseudo_operation_data like '{}%' AND !arrange_operating_room_number
+                pseudo_operation_data like '{}%' AND has_arranged = '否'
                                """.format(self.strf_date)
 
         waiting_list = []
