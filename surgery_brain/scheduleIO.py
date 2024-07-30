@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 import pandas as pd
 import datetime
-from common.sql_util import query_all_dict
+from common.sql_util import query_all_dict, execute_sql
 from common.logger import Logger
+import re
 
 
 class ScheduleIO():
@@ -16,6 +17,7 @@ class ScheduleIO():
 
         self.schedule_date = schedule_date
         self.__rooms_id_2_info = None
+        self.__dept_seq_to_room_id = self.__get_dept_seq_to_room_id_df()
 
     def get_weekday(self):
         """
@@ -61,9 +63,10 @@ class ScheduleIO():
                 self.__rooms_id_2_info[row["id"]] = (row["operating_department"], row["real_name"])
         return self.__rooms_id_2_info[room_id]
 
-    def get_dept_seq_to_room_id_df(self):
+    def __get_dept_seq_to_room_id_df(self):
         """
         基于手术科室与台序字母，在当前星期，得到该科室的台序字母对应的手术室id
+        注意: 此方法不对外暴露，只能类内部调用
         :return: DataFrame, 手术室分配信息，包括科室、台序字母、手术室id、权重
         """
         sql = """
@@ -114,6 +117,33 @@ class ScheduleIO():
         self.logger.info("当前星期{},当前星期的手术室分配为:\n{}".format(self.get_weekday(), df))
         return df
 
+    def get_room_id_and_weight(self, dept, seq_alphabet):
+        """
+        根据科室与台序字母,以及当前星期，得到对应的手术室id与权重
+        :param dept: 科室
+        :param seq_alphabet: 台序字母
+        :return: room_id, weight
+        """
+
+        fuzzy_dept = re.sub(r"\d+", "", dept)
+
+        # select the where self.__dept_seq_to_room_id["dept"] contains fuzzy_dept
+        seq_df = self.__dept_seq_to_room_id.loc[self.__dept_seq_to_room_id["dept"].str.contains(fuzzy_dept)]
+
+        if seq_df.__len__() == 0:
+            self.logger.info("当前科室{}当日没有对应的手术室".format(dept))
+            return None, None
+
+        seq_df = seq_df.loc[seq_df["seq_alphabet"] == seq_alphabet]
+        if seq_df.__len__() == 0:
+            self.logger.info("当前科室{}{}当日没有对应的手术室".format(dept, seq_alphabet))
+            return None, None
+        else:
+            room_id = seq_df["room_id"].values[0]
+            weight = seq_df["weight"].values[0]
+            self.logger.info("当前科室{}{}当日对应的手术室为{}".format(dept, seq_alphabet, room_id))
+            return room_id, weight
+
     def get_unarranged_applications(self):
         """
         查询未安排手术的申请, 用于排程
@@ -129,7 +159,7 @@ class ScheduleIO():
             from 
                 surgicalapplicationinfo_python
             where
-                pseudo_operation_data like '{}%' AND has_arranged = '否'
+                pseudo_operation_data like '{}%' AND arranged = '否'
                                """.format(self.schedule_date)
 
         unarranged_list = []
@@ -137,7 +167,7 @@ class ScheduleIO():
             application = {'id': row['id'],
                            'doctor': row['doctor'],
                            'dept': row['dept'],
-                           'duration': round(float(row['duration'])),
+                           'duration': max(round(float(row['duration'])), 0.5),  # 四舍五入取整,但是至少为0.5小时
                            'seq_alphabet': row['seq'][0],
                            'seq_number': int(row['seq'][1:])
                            }
@@ -149,4 +179,35 @@ class ScheduleIO():
         回写数据库
         :param applications: list[dict], 申请列表
         """
-        pass
+        for application in applications:
+            assert isinstance(application, dict)
+            assert 'id' in application
+            assert 'arranged' in application
+            assert 'arranged_room_id' in application
+            assert 'arranged_room_dept' in application
+            assert 'arranged_room_name' in application
+            assert 'arranged_start_time' in application
+            assert 'arranged_end_time' in application
+            assert application['arranged_start_time'] < application['arranged_end_time']
+            # TODO: 其余数据合规性检查
+
+        for application in applications:
+            sql = """
+                update surgicalapplicationinfo_python
+                set 
+                    arranged = '{}',
+                    arranged_room_id = '{}',
+                    arranged_room_dept = '{}',
+                    arranged_room_name = '{}',
+                    arranged_start_time = '{}',
+                    arranged_end_time = '{}'
+                where
+                    application_number = '{}'
+            """.format(application['arranged'],
+                       application['arranged_room_id'],
+                       application['arranged_room_dept'],
+                       application['arranged_room_name'],
+                       application['arranged_start_time'],
+                       application['arranged_end_time'],
+                       application['id'])
+            execute_sql(sql)

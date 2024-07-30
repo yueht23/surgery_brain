@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import datetime
 from common.logger import Logger
-import re
 from django.db import connection as django_connection
 from surgery_brain.scheduleIO import ScheduleIO
 
@@ -14,38 +13,26 @@ class Schedule():
         self.schedule_date = datetime.datetime.strptime(schedule_date, "%Y-%m-%d").strftime("%Y-%m-%d")
         self.sio = ScheduleIO(self.schedule_date)
 
-        self.__dept_seq_to_room_id = self.sio.get_dept_seq_to_room_id_df()
+        """
+        定义排程的一些参数
+        """
+        self.MAX_DOCTOR_WORKLOAD = 13.0  # 医生当日最大工作量
+        self.MAX_ROOM_WORKLOAD = 13.0  # 手术室当日最大工作量
+        self.TURNOVER_INTERVAL = 0.5  # 手术室换台间隔
+        self.BEGIN_TIME = 8.0  # 手术室开始工作时间
+
+        """
+        定义一轮手术日确定性排程的所需数据结构
+        """
         self.doctor_workload = {}
         self.rooms = {}
 
+        """
+        定义二轮抢单排程的所需数据结构
+        """
+        # TODO:
+
         self.logger.info("Schedule initialized")
-
-    def __get_room_id_and_weight(self, dept, seq_alphabet):
-        """
-        Based on the department and the sequence alphabet,  return the room id.
-        :param dept:
-        :param seq_alphabet:
-        :return:
-        """
-        # using re to drop the digits of dept
-        fuzzy_dept = re.sub(r"\d+", "", dept)
-
-        # select the where self.__dept_seq_to_room_id["dept"] contains fuzzy_dept
-        seq_df = self.__dept_seq_to_room_id.loc[self.__dept_seq_to_room_id["dept"].str.contains(fuzzy_dept)]
-
-        if seq_df.__len__() == 0:
-            self.logger.info("当前科室{}当日没有对应的手术室".format(dept))
-            return None, None
-
-        seq_df = seq_df.loc[seq_df["seq_alphabet"] == seq_alphabet]
-        if seq_df.__len__() == 0:
-            self.logger.info("当前科室{}{}当日没有对应的手术室".format(dept, seq_alphabet))
-            return None, None
-        else:
-            room_id = seq_df["room_id"].values[0]
-            weight = seq_df["weight"].values[0]
-            self.logger.info("当前科室{}{}当日对应的手术室为{}".format(dept, seq_alphabet, room_id))
-            return room_id, weight
 
     def __check_doctor_overwork(self, doctor, max_workload=13.0):
         """
@@ -74,9 +61,13 @@ class Schedule():
         """
         return self.__get_room_workload(room_id, interval) - interval > max_workload
 
-    def run(self):
-        self.logger.info("Schedule running...")
+    def schedule_first(self):
+        """
+        一期的手术日确定性排程
+        :return: None
+        """
 
+        self.logger.info("开始确定性排程...")
         self.logger.info("获取waiting list...")
         waiting_list = self.sio.get_unarranged_applications()
         self.logger.info("waiting list获取成功")
@@ -94,7 +85,7 @@ class Schedule():
                 self.logger.info("跳过当前申请")
                 continue
 
-            room_id, init_weight = self.__get_room_id_and_weight(application['dept'], application['seq_alphabet'])
+            room_id, init_weight = self.sio.get_room_id_and_weight(application['dept'], application['seq_alphabet'])
             if not room_id:
                 self.logger.info("当前申请没有对应的手术室")
                 self.logger.info("跳过当前申请")
@@ -134,34 +125,25 @@ class Schedule():
                 self.logger.info("当前医生{}的工作量为{}".format(dropped_application['doctor'],
                                                                  self.doctor_workload[dropped_application['doctor']]))
 
-        self.logger.info("回写数据库")
+        self.logger.info("排好结果汇总")
+        res = []
         for room_id, applications in self.rooms.items():
-            operating_department, real_name = self.sio.get_room_info_from_id(room_id)  # 手术部, 真实名称
+            operating_department, real_name = self.sio.get_room_info_from_id(room_id)
+            clock = self.BEGIN_TIME
+            for idx, application in enumerate(applications):
+                res.append({
+                    "id": application["id"],
+                    "arranged": "是",
+                    "arranged_room_id": room_id,  # e.g. 2586
+                    "arranged_room_dept": operating_department,  # e.g. 第一手术部
+                    "arranged_room_name": real_name,  # e.g. 01
+                    "arranged_start_time": clock,
+                    "arranged_end_time": clock + application["duration"],
+                })
+                clock += application["duration"] + self.TURNOVER_INTERVAL
+        self.logger.info(f"排好结果汇总完成，申请数为{len(waiting_list)}，一阶段完成数为{len(res)}")
 
-            for application in applications:
-                sql = """
-                update 
-                    surgicalapplicationinfo_python
-                set 
-                    has_arranged = '是',
-                    arrange_operating_number = '{}',
-                    arrange_operating_room = '{}',
-                    arrange_operating_room_number = '{}',
-                    second_round_scheduling_weight = '{}'
-                where 
-                    application_number = '{}'
-                                """.format(operating_department,
-                                           real_name,
-                                           room_id,
-                                           application["weight"],
-                                           application["id"])
-
-                conn = django_connection
-                cursor = conn.cursor()
-                cursor.execute(sql)
-                conn.commit()
-                cursor.close()
-                conn.close()
-
+        self.logger.info("回写数据库")
+        self.sio.write_result_to_db(res)
         self.logger.info("数据库回写成功")
         self.logger.info("Schedule runned")

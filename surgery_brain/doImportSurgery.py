@@ -28,12 +28,12 @@ def do_import_surgery(date):
               --             新加字段
               -- -------------------------------- 
               
-              '否' AS has_arranged, -- 是否已经被排程
-              NULL AS second_round_scheduling_weight, -- 二轮排程权重
-              NULL AS arrange_operating_room_number, -- 安排手术间编号
-              NULL AS arrange_operating_number, -- 安排手术部
-              NULL AS arrange_operating_room -- 安排手术间
-              
+              '否' AS  arranged, -- 是否已经被排程
+              NULL AS arranged_room_id, -- 安排手术间编号
+              NULL AS arranged_room_dept, -- 安排手术部
+              NULL AS arranged_room_name, -- 安排手术间
+              NULL AS arranged_start_time, -- 安排手术开始时间
+              NULL AS arranged_end_time -- 安排手术结束时间
             FROM
               surgicalapplication_info_port sip
               INNER JOIN doctor_info di ON di.doctor = sip.SURGERY_DR_NAME -- AND di.department = sip.APPLY_DEPT_NAME
@@ -78,7 +78,9 @@ def do_import_surgery(date):
     logger = Logger(__name__).get_logger()
     surgeryTable = pd.DataFrame(query_all_dict(sql), dtype=str)
     logger.info("surgeryTable shape:{}".format(surgeryTable.shape))
-    logger.info("申请号集合: {}".format(surgeryTable['application_number'].values.tolist()))
 
     if not surgeryTable.empty:
+        logger.info("申请号集合: {}".format(surgeryTable['application_number'].values.tolist()))
         surgeryTable.to_sql('surgicalapplicationinfo_python', get_sqlalchemy_engine(), if_exists='replace', index=False)
+    else:
+        raise ValueError("没有需要导入的手术，无需排程，检查日期是否正确，当日是否有手术申请")

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 from django.http import HttpResponse
 import json
-from . import schedule2 as schedule
 from surgery_brain.doImportSurgery import do_import_surgery
+from .schedule2 import Schedule
 
 from common.logger import Logger
 
@@ -19,10 +19,9 @@ def get_first_schedule(request):
         logger.info("import the surgery is done")
 
         logger.info("first schedule and  case_date: " + case_date)
-        my_schedule = schedule.Schedule(schedule_date=case_date)
+        my_schedule = Schedule(schedule_date=case_date)
 
-        my_schedule.run()
-
+        my_schedule.schedule_first()
 
         logger.info("first schedule is done")
         return HttpResponse(json.dumps(result))
