@@ -1,5 +1,83 @@
 # -*- coding: utf-8 -*-
-from django.db import connection
+
+env = 'aliyun'
+if env == 'aliyun':
+    import pymysql
+
+    # TODO: 注意上线时删除
+
+    MYSQL_HOST = 'rm-cn-rp63uk5ag0001ezo.rwlb.rds.aliyuncs.com'
+    MYSQL_PORT = 3306
+    MYSQL_USER = 'root'
+    MYSQL_PASSWORD = "C2matica!"
+    MYSQL_DB = 'zhihuishoshudanao'
+    MYSQL_CHARSET = 'utf8'
+    connection = pymysql.connect(host=MYSQL_HOST,
+                                 port=MYSQL_PORT,
+                                 user=MYSQL_USER,
+                                 password=MYSQL_PASSWORD,
+                                 db=MYSQL_DB,
+                                 charset=MYSQL_CHARSET)
+
+
+    def get_sqlalchemy_engine():
+        """
+        获取defualt数据库的sqlalchemy engine
+        :param database:
+        :return: a sqlalchemy engine
+        """
+        from sqlalchemy import create_engine
+
+        # Construct the SQLAlchemy connection string
+        connection_string = f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DB}"
+
+        # Create the SQLAlchemy engine
+        engine = create_engine(connection_string)
+
+        return engine
+
+elif env == 'default':
+    from django.db import connection
+
+
+    def get_sqlalchemy_engine(database='default'):
+        """
+        获取defualt数据库的sqlalchemy engine
+        :param database:
+        :return: a sqlalchemy engine
+        """
+        from django.conf import settings
+        from sqlalchemy import create_engine
+
+        # Extract the database settings
+        db_settings = settings.DATABASES['default']
+
+        # Map Django engine to SQLAlchemy dialect
+        DIALECT_MAP = {
+            'django.db.backends.mysql': 'mysql',
+        }
+
+        # Get the corresponding SQLAlchemy dialect
+        dialect = DIALECT_MAP.get(db_settings['ENGINE'])
+
+        if dialect is None:
+            raise ValueError(f"Unsupported Django database engine: {db_settings['ENGINE']}")
+
+        # Construct the SQLAlchemy connection string
+        if dialect == 'sqlite':
+            connection_string = f"{dialect}:///{db_settings['NAME']}"
+        else:
+            connection_string = (
+                f"{dialect}://"
+                f"{db_settings.get('USER', '')}:{db_settings.get('PASSWORD', '')}@"
+                f"{db_settings.get('HOST', 'localhost')}:{db_settings.get('PORT', '')}/"
+                f"{db_settings['NAME']}"
+            )
+
+        # Create the SQLAlchemy engine
+        engine = create_engine(connection_string)
+
+        return engine
 
 
 def query_all_dict(sql, params=None):
@@ -37,43 +115,3 @@ def execute_sql(sql, params=None):
         else:
             cursor.execute(sql)
         return cursor.rowcount
-
-
-def get_sqlalchemy_engine(database='default'):
-    """
-    获取defualt数据库的sqlalchemy engine
-    :param database:
-    :return: a sqlalchemy engine
-    """
-    from django.conf import settings
-    from sqlalchemy import create_engine
-
-    # Extract the database settings
-    db_settings = settings.DATABASES['default']
-
-    # Map Django engine to SQLAlchemy dialect
-    DIALECT_MAP = {
-        'django.db.backends.mysql': 'mysql',
-    }
-
-    # Get the corresponding SQLAlchemy dialect
-    dialect = DIALECT_MAP.get(db_settings['ENGINE'])
-
-    if dialect is None:
-        raise ValueError(f"Unsupported Django database engine: {db_settings['ENGINE']}")
-
-    # Construct the SQLAlchemy connection string
-    if dialect == 'sqlite':
-        connection_string = f"{dialect}:///{db_settings['NAME']}"
-    else:
-        connection_string = (
-            f"{dialect}://"
-            f"{db_settings.get('USER', '')}:{db_settings.get('PASSWORD', '')}@"
-            f"{db_settings.get('HOST', 'localhost')}:{db_settings.get('PORT', '')}/"
-            f"{db_settings['NAME']}"
-        )
-
-    # Create the SQLAlchemy engine
-    engine = create_engine(connection_string)
-
-    return engine

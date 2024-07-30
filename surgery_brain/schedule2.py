@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import datetime
 from common.logger import Logger
-from django.db import connection as django_connection
 from surgery_brain.scheduleIO import ScheduleIO
 
 
