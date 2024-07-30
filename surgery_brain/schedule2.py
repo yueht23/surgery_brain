@@ -16,7 +16,7 @@ class Schedule():
         定义排程的一些参数
         """
         self.MAX_DOCTOR_WORKLOAD = 13.0  # 医生当日最大工作量
-        self.MAX_ROOM_WORKLOAD = 13.0  # 手术室当日最大工作量
+        self.MAX_ROOM_WORKLOAD = 12.0  # 手术室当日最大工作量
         self.TURNOVER_INTERVAL = 0.5  # 手术室换台间隔
         self.BEGIN_TIME = 8.0  # 手术室开始工作时间
 
@@ -33,7 +33,7 @@ class Schedule():
 
         self.logger.info("Schedule initialized")
 
-    def __check_doctor_overwork(self, doctor, max_workload=13.0):
+    def __check_doctor_overwork(self, doctor):
         """
         Get the doctor workload of the current day.
         :return:
@@ -41,24 +41,24 @@ class Schedule():
 
         if doctor not in self.doctor_workload:
             self.doctor_workload[doctor] = 0.0
-        return self.doctor_workload[doctor] > max_workload
+        return self.doctor_workload[doctor] > self.MAX_DOCTOR_WORKLOAD
 
-    def __get_room_workload(self, room_id, interval=0.5):
+    def __get_room_workload(self, room_id):
         """
         Get the room workload of the current day.
         :return:
         """
         total_duration = 0.0
         for application in self.rooms[room_id]:
-            total_duration += application['duration'] + interval
+            total_duration += application['duration'] + self.TURNOVER_INTERVAL
         return total_duration
 
-    def __check_room_overwork(self, room_id, max_workload=13.0, interval=0.5):
+    def __check_room_overwork(self, room_id):
         """
         Get the room workload of the current day, noted the last application must end before 8:00 + 13:00 = 21:00
         :return:
         """
-        return self.__get_room_workload(room_id, interval) - interval > max_workload
+        return self.__get_room_workload(room_id) - self.TURNOVER_INTERVAL > self.MAX_ROOM_WORKLOAD
 
     def schedule_first(self):
         """
