@@ -35,33 +35,46 @@ class ScheduleIO():
                       --         原手术申请表字段
                       -- -------------------------------- 
 
-                      sip.SURGERY_DATE AS 'pseudo_operation_data', -- 拟手术日期
-                      sip.ELECTR_REQUISITION_NO AS 'application_number', -- 申请号
-                      -- sip.INHOSP_INDEX_NO AS 'admission_number', -- 住院号
+                      sip.ELECTR_REQUISITION_NO AS 'id', -- 手术申请单号
+                      sip.SURGERY_DATE AS 'surgery_date', -- 拟手术日期
+                      sip.INHOSP_INDEX_NO AS 'inpatient_serial', -- 住院流水号
                       sip.PAT_NAME AS 'patient_name', -- 患者姓名
-                      sip.APPLY_DEPT_NAME AS 'apply_department', -- 申请科室
-                      sip.SURGERY_DR_NAME AS 'surgeon', -- 主刀医生
-                      sip.SURGERY_TABLE_NO AS 'table_sequence', -- 台序
-                      REPLACE(sip.SURGERY_DURATION, '-小时', '') AS 'estimated_duration_operation', -- 预估手术时长
-                      -- sip.surgery AS 'surgery', -- 是否日间手术
-                      -- sip.robot AS 'robot', -- 机器人
-                      -- sip.interventional_operation AS 'interventional_operation', -- 介入手术
-                      -- sip.perspective AS 'perspective', -- 透视
-                      -- sip.holmium_laser AS 'holmium_laser', -- 钬激光 
+                      sip.APPLY_DEPT_NAME AS 'apply_dept', -- 申请科室
+                      sip.SURGERY_DR_NAME AS 'surgeon_name', -- 主刀医生姓名
+                      sip.SURGERY_DR_CODE AS 'surgeon_code', -- 主刀医生id
+                      sip.SURGERY_TABLE_NO AS 't_seq', -- 台序
+                      REPLACE(sip.SURGERY_DURATION, '-小时', '') AS 'duration', -- 预估手术时长
+                      sip.surgery AS 'day_surgery', -- 是否日间手术
+                      sip.SURGERY_WOUND_CATEG_CODE AS 'incision_type', -- 切口类型
+                    
+                      -- 四类特殊手术
+                      sip.robot AS 'is_sp_robot', -- 是否为机器人特殊手术
+                      sip.interventional_operation AS 'is_sp_intervention', -- 是否为介入特殊手术
+                      sip.perspective AS 'is_sp_perspective', -- 是否为透视特殊手术
+                      sip.holmium_laser AS 'is_sp_holmium', -- 是否为钬激光特殊手术
+
+                     -- -----------------------------------
+                     -- 如下字段暂时读不到，暂时新建字段，然后生成
+                     -- -----------------------------------
+                     TRUE  AS 'is_admitted', -- 是否已入院, 三阶段排程要用
+                     FALSE AS 'is_infected', -- 是否感染
+                     FALSE AS 'is_operation', -- 操作非手术
+                     FALSE AS 'is_mini_invasive', -- 是否微创
 
                       -- -------------------------------- 
-                      --             新加字段
+                      --        新加字段(用于排程结果记录)
                       -- -------------------------------- 
 
-                      '否' AS  arranged, -- 是否已经被排程
-                      NULL AS arranged_room_id, -- 安排手术间编号
-                      NULL AS arranged_room_dept, -- 安排手术部
-                      NULL AS arranged_room_name, -- 安排手术间
-                      NULL AS arranged_start_time, -- 安排手术开始时间
-                      NULL AS arranged_end_time -- 安排手术结束时间
+                      FALSE AS  'is_arranged', -- 是否已经被排程
+                      NULL AS 'arranged_room_id', -- 安排手术间编号
+                      NULL AS 'arranged_room_dept', -- 安排手术部
+                      NULL AS 'arranged_room_name', -- 安排手术间
+                      NULL AS 'arranged_start_time', -- 安排手术开始时间
+                      NULL AS 'arranged_end_time', -- 安排手术结束时间
+                      0 AS 'attempt_times' -- 排程尝试次数
                     FROM
                       surgicalapplication_info_port sip
-                      INNER JOIN doctor_info di ON di.doctor = sip.SURGERY_DR_NAME -- AND di.department = sip.APPLY_DEPT_NAME
+                      INNER JOIN doctor_info di ON di.doctor = sip.SURGERY_DR_NAME
                     WHERE
                       sip.SURGERY_DATE LIKE '{}%' 
                       AND ( sip.scheduling_state = FALSE OR sip.scheduling_state IS NULL ) 
@@ -101,10 +114,11 @@ class ScheduleIO():
                     """.format(self.schedule_date)
 
         self.logger.info("从surgicalapplicationinfo_port表中导入手术数据到surgicalapplicationinfo_python表中...")
-        surgery_table = pd.DataFrame(query_all_dict(sql), dtype=str)
+        surgery_table = pd.DataFrame(query_all_dict(sql))
 
         if not surgery_table.empty:
             self.logger.info("手术数据导入完成，共{}条数据".format(surgery_table.shape[0]))
+            # 完成数据类型转换
             surgery_table.to_sql('surgicalapplicationinfo_python',
                                  get_sqlalchemy_engine(),
                                  if_exists='replace',
@@ -154,7 +168,7 @@ class ScheduleIO():
             self.__rooms_id_2_info = {}
             for row in query_all_dict(sql):
                 self.__rooms_id_2_info[row["id"]] = (row["operating_department"], row["real_name"])
-        return self.__rooms_id_2_info[room_id]
+        return self.__rooms_id_2_info[int(room_id)]
 
     def __get_dept_seq_to_room_id_df(self):
         """
@@ -237,35 +251,50 @@ class ScheduleIO():
             self.logger.info("当前科室{}{}当日对应的手术室为{}".format(dept, seq_alphabet, room_id))
             return room_id, weight
 
-    def get_unarranged_applications(self):
+    def __get_applications(self, is_arranged):
         """
-        查询未安排手术的申请, 用于排程
+        依据is_arranged，获取未安排或者已安排的手术申请
         :return: list[dict], 未安排手术的申请列表
         """
         sql = """
             select 
-                  application_number as 'id',
-                  surgeon as 'doctor',
-                  apply_department as 'dept',
-                  estimated_duration_operation as 'duration',
-                  table_sequence as 'seq'
+                *
             from 
                 surgicalapplicationinfo_python
             where
-                pseudo_operation_data like '{}%' AND arranged = '否'
-                               """.format(self.schedule_date)
+                surgery_date like '{}%' AND is_arranged = {}
+                               """.format(self.schedule_date, is_arranged)
 
-        unarranged_list = []
-        for row in query_all_dict(sql):
-            application = {'id': row['id'],
-                           'doctor': row['doctor'],
-                           'dept': row['dept'],
-                           'duration': max(round(float(row['duration'])), 0.5),  # 四舍五入取整,但是至少为0.5小时
-                           'seq_alphabet': row['seq'][0],
-                           'seq_number': int(row['seq'][1:])
-                           }
-            unarranged_list.append(application)
-        return unarranged_list
+        applications = query_all_dict(sql)
+        for application in applications:
+            application['duration'] = max(round(float(application['duration'])), 0.5)
+            application['seq_alphabet'] = application['t_seq'][0]
+            application['seq_number'] = int(application['t_seq'][1:])
+
+            # todo: 当前还没有医生代码，暂时用医生姓名+hashcode代替
+            application['surgeon_code'] = f"{application['surgeon_code']}({str(hash(application['surgeon_code']))[:6]})"
+
+            if application['is_arranged']:
+                application['arranged_start_time'] = datetime.datetime.strptime(application['arranged_start_time'],
+                                                                                "%Y-%m-%d %H:%M:%S")
+                application['arranged_end_time'] = datetime.datetime.strptime(application['arranged_end_time'],
+                                                                              "%Y-%m-%d %H:%M:%S")
+
+        return applications
+
+    def get_unarranged_applications(self):
+        """
+        获取未安排手术的申请
+        :return: list[dict], 未安排手术的申请列表
+        """
+        return self.__get_applications(is_arranged=False)
+
+    def get_arranged_applications(self):
+        """
+        获取已安排手术的申请
+        :return: list[dict], 已安排手术的申请列表
+        """
+        return self.__get_applications(is_arranged=True)
 
     def write_result_to_db(self, applications):
         """
@@ -275,28 +304,29 @@ class ScheduleIO():
         for application in applications:
             assert isinstance(application, dict)
             assert 'id' in application
-            assert 'arranged' in application
+            assert 'is_arranged' in application
             assert 'arranged_room_id' in application
-            assert 'arranged_room_dept' in application
-            assert 'arranged_room_name' in application
             assert 'arranged_start_time' in application
             assert 'arranged_end_time' in application
             assert application['arranged_start_time'] < application['arranged_end_time']
             # TODO: 其余数据合规性检查
 
         for application in applications:
+            room_dept, room_name = self.get_room_info_from_id(application['arranged_room_id'])
+            application['arranged_room_dept'] = room_dept  # e.g. 第一手术部
+            application['arranged_room_name'] = room_name  # e.g. 01
             sql = """
                 update surgicalapplicationinfo_python
                 set 
-                    arranged = '{}',
+                    is_arranged = '{}',
                     arranged_room_id = '{}',
                     arranged_room_dept = '{}',
                     arranged_room_name = '{}',
                     arranged_start_time = '{}',
                     arranged_end_time = '{}'
                 where
-                    application_number = '{}'
-            """.format(application['arranged'],
+                    id = '{}'
+            """.format(application['is_arranged'],
                        application['arranged_room_id'],
                        application['arranged_room_dept'],
                        application['arranged_room_name'],

@@ -114,4 +114,5 @@ def execute_sql(sql, params=None):
             cursor.execute(sql, params=params)
         else:
             cursor.execute(sql)
+        connection.commit()
         return cursor.rowcount
