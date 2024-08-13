@@ -39,7 +39,7 @@ class ScheduleIO():
                       sip.SURGERY_DATE AS 'surgery_date', -- 拟手术日期
                       sip.INHOSP_INDEX_NO AS 'inpatient_serial', -- 住院流水号
                       sip.PAT_NAME AS 'patient_name', -- 患者姓名
-                      sip.APPLY_DEPT_NAME AS 'apply_dept', -- 申请科室
+                      sip.APPLY_DEPT_NAME AS 'apply_dept', -- 申请科室名称
                       sip.SURGERY_DR_NAME AS 'surgeon_name', -- 主刀医生姓名
                       sip.SURGERY_DR_CODE AS 'surgeon_code', -- 主刀医生id
                       sip.SURGERY_TABLE_NO AS 't_seq', -- 台序
@@ -296,6 +296,26 @@ class ScheduleIO():
         :return: list[dict], 已安排手术的申请列表
         """
         return self.__get_applications(is_arranged=True)
+
+    def get_available_rooms_for_dept(self, apply_dept):
+        """
+        获取当前科室的所有可用手术室, 读取科室与手术室的约束表
+        :param apply_dept: 申请科室名称
+        :return: list, 可用手术室id列表
+        """
+        sql = """
+        SELECT
+          ao.family_name AS apply_dept, -- 申请科室名称
+          -- ao.family_code AS apply_dept_code, -- 申请科室名称
+          ic.operating_room_id AS room_id-- 手术室ID
+          
+        FROM
+          administrative_office ao
+          JOIN interoperative_constraint ic ON ao.family_code = ic.department 
+        WHERE
+          ic.whether_can_operation = 1 AND ao.family_name = '{}'
+        """.format(apply_dept)
+        return [row['room_id'] for row in query_all_dict(sql)]
 
     def write_result_to_db(self, applications):
         """

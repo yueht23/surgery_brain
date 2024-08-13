@@ -12,8 +12,16 @@ if __name__ == "__main__":
     print("现在所有未排程的申请：")
     pprint(schedule.sio.get_unarranged_applications())
 
+    print("儿科现在可用的手术室：")
+    pprint(schedule.sio.get_available_rooms_for_dept("儿科"))
+    print("产科现在可用的手术室：")
+    pprint(schedule.sio.get_available_rooms_for_dept("妇科"))
+
     print("一阶段确定性排程：")
     schedule.schedule_first()
 
     print("可视化排程结果：")
     schedule.gantt_chart()
+
+    print("二阶段抢单排程：")
+    schedule.schedule_sec()
