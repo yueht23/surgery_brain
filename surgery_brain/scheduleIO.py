@@ -46,6 +46,7 @@ class ScheduleIO():
                       REPLACE(sip.SURGERY_DURATION, '-小时', '') AS 'duration', -- 预估手术时长
                       sip.surgery AS 'day_surgery', -- 是否日间手术
                       sip.SURGERY_WOUND_CATEG_CODE AS 'incision_type', -- 切口类型
+                      REPLACE(sip.SURGERY_LEVEL_NAME, '级手术', '') AS 'surgery_level', -- 手术级别
                     
                       -- 四类特殊手术
                       sip.robot AS 'is_sp_robot', -- 是否为机器人特殊手术
