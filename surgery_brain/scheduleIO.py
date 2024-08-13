@@ -30,88 +30,100 @@ class ScheduleIO():
         :return:
         """
         sql = """
-                    SELECT DISTINCT
-                      -- -------------------------------- 
-                      --         原手术申请表字段
-                      -- -------------------------------- 
-
-                      sip.ELECTR_REQUISITION_NO AS 'id', -- 手术申请单号
-                      sip.SURGERY_DATE AS 'surgery_date', -- 拟手术日期
-                      sip.INHOSP_INDEX_NO AS 'inpatient_serial', -- 住院流水号
-                      sip.PAT_NAME AS 'patient_name', -- 患者姓名
-                      sip.APPLY_DEPT_NAME AS 'apply_dept', -- 申请科室名称
-                      sip.SURGERY_DR_NAME AS 'surgeon_name', -- 主刀医生姓名
-                      sip.SURGERY_DR_CODE AS 'surgeon_code', -- 主刀医生id
-                      sip.SURGERY_TABLE_NO AS 't_seq', -- 台序
-                      REPLACE(sip.SURGERY_DURATION, '-小时', '') AS 'duration', -- 预估手术时长
-                      sip.surgery AS 'day_surgery', -- 是否日间手术
-                      sip.SURGERY_WOUND_CATEG_CODE AS 'incision_type', -- 切口类型
-                      REPLACE(sip.SURGERY_LEVEL_NAME, '级手术', '') AS 'surgery_level', -- 手术级别
-                    
-                      -- 四类特殊手术
-                      sip.robot AS 'is_sp_robot', -- 是否为机器人特殊手术
-                      sip.interventional_operation AS 'is_sp_intervention', -- 是否为介入特殊手术
-                      sip.perspective AS 'is_sp_perspective', -- 是否为透视特殊手术
-                      sip.holmium_laser AS 'is_sp_holmium', -- 是否为钬激光特殊手术
-
-                     -- -----------------------------------
-                     -- 如下字段暂时读不到，暂时新建字段，然后生成
-                     -- -----------------------------------
-                     TRUE  AS 'is_admitted', -- 是否已入院, 三阶段排程要用
-                     FALSE AS 'is_infected', -- 是否感染
-                     FALSE AS 'is_operation', -- 操作非手术
-                     FALSE AS 'is_mini_invasive', -- 是否微创
-
-                      -- -------------------------------- 
-                      --        新加字段(用于排程结果记录)
-                      -- -------------------------------- 
-
-                      FALSE AS  'is_arranged', -- 是否已经被排程
-                      NULL AS 'arranged_room_id', -- 安排手术间编号
-                      NULL AS 'arranged_room_dept', -- 安排手术部
-                      NULL AS 'arranged_room_name', -- 安排手术间
-                      NULL AS 'arranged_start_time', -- 安排手术开始时间
-                      NULL AS 'arranged_end_time', -- 安排手术结束时间
-                      0 AS 'attempt_times' -- 排程尝试次数
-                    FROM
-                      surgicalapplication_info_port sip
-                      INNER JOIN doctor_info di ON di.doctor = sip.SURGERY_DR_NAME
-                    WHERE
-                      sip.SURGERY_DATE LIKE '{}%' 
-                      AND ( sip.scheduling_state = FALSE OR sip.scheduling_state IS NULL ) 
-                      AND sip.SURGERY_DEPT_NAME IN ( '第一手术部', '第二手术部', '日间手术室' ) 
-                      AND sip.APPLY_DEPT_NAME IN (
-                        '产科',
-                        '妇科',
-                        '耳鼻咽喉头颈外科',
-                        '骨科关节',
-                        '骨科脊柱',
-                        '泌尿外科',
-                        '胆胰外科',
-                        '普外甲乳外科',
-                        '胃肠中心109',
-                        '胃肠中心209',
-                        '胃肠中心309',
-                        '胸外科',
-                        '普外疝儿外科',
-                        '肾脏内科',
-                        '口腔科',
-                        '创伤中心2',
-                        '骨科创伤',
-                        '骨科手足',
-                        '普外血管外科',
-                        '神经外科504',
-                        '神经外科505',
-                        '神经外科506',
-                        '心脏大血管病中心',
-                        '心内科206',
-                        '心内科306',
-                        '男科',
-                        '运动医学科',
-                        '肝脾外科' 
-                      ) 
-                    ORDER BY
-                      sip.ELECTR_REQUISITION_NO;
+            SELECT DISTINCT
+            -- --------------------------------
+            --         原手术申请表字段
+            -- --------------------------------
+            sip.ELECTR_REQUISITION_NO AS 'id',-- 手术申请单号
+            sip.SURGERY_DATE AS 'surgery_date',-- 拟手术日期
+            sip.INHOSP_INDEX_NO AS 'inpatient_serial',-- 住院流水号
+            sip.PAT_NAME AS 'patient_name',-- 患者姓名
+            sip.APPLY_DEPT_NAME AS 'apply_dept',-- 申请科室名称
+            sip.SURGERY_DR_NAME AS 'surgeon_name',-- 主刀医生姓名
+            sip.SURGERY_DR_CODE AS 'surgeon_code',-- 主刀医生id
+            sip.SURGERY_TABLE_NO AS 't_seq',-- 台序
+            REPLACE ( sip.SURGERY_DURATION, '-小时', '' ) AS 'duration',-- 预估手术时长
+            sip.surgery AS 'day_surgery',-- 是否日间手术
+            sip.SURGERY_WOUND_CATEG_CODE AS 'incision_type',-- 切口类型
+            REPLACE ( sip.SURGERY_LEVEL_NAME, '级手术', '' ) AS 'surgery_level',-- 手术级别
+            -- 四类特殊手术
+            CASE
+                
+                WHEN sip.robot = '是' THEN
+              TRUE ELSE FALSE 
+              END AS 'is_sp_robot',-- 是否为机器人特殊手术
+            CASE
+                
+                WHEN sip.interventional_operation = '是' THEN
+              TRUE ELSE FALSE 
+              END AS 'is_sp_intervention',-- 是否为介入特殊手术
+            CASE
+                
+                WHEN sip.perspective = '是' THEN
+              TRUE ELSE FALSE 
+              END AS 'is_sp_perspective',-- 是否为透视特殊手术
+            CASE
+                
+                WHEN sip.holmium_laser = '是' THEN
+              TRUE ELSE FALSE 
+              END AS 'is_sp_holmium',-- 是否为钬激光特殊手术
+            -- -----------------------------------
+            -- 如下字段暂时读不到，暂时新建字段，然后生成
+            -- -----------------------------------
+              TRUE AS 'is_admitted',-- 是否已入院, 三阶段排程要用
+              FALSE AS 'is_infected',-- 是否感染
+              FALSE AS 'is_operation',-- 操作非手术
+              FALSE AS 'is_mini_invasive',-- 是否微创
+            -- --------------------------------
+            --        新加字段(用于排程结果记录)
+            -- --------------------------------
+              FALSE AS 'is_arranged',-- 是否已经被排程
+              NULL AS 'arranged_room_id',-- 安排手术间编号
+              NULL AS 'arranged_room_dept',-- 安排手术部
+              NULL AS 'arranged_room_name',-- 安排手术间
+              NULL AS 'arranged_start_time',-- 安排手术开始时间
+              NULL AS 'arranged_end_time',-- 安排手术结束时间
+              0 AS 'attempt_times' -- 排程尝试次数
+              
+            FROM
+              surgicalapplication_info_port sip
+              INNER JOIN doctor_info di ON di.doctor = sip.SURGERY_DR_NAME 
+            WHERE
+              sip.SURGERY_DATE LIKE '{}%' 
+              AND ( sip.scheduling_state = FALSE OR sip.scheduling_state IS NULL ) 
+              AND sip.SURGERY_DEPT_NAME IN ( '第一手术部', '第二手术部', '日间手术室' ) 
+              AND sip.APPLY_DEPT_NAME IN (
+                '产科',
+                '妇科',
+                '耳鼻咽喉头颈外科',
+                '骨科关节',
+                '骨科脊柱',
+                '泌尿外科',
+                '胆胰外科',
+                '普外甲乳外科',
+                '胃肠中心109',
+                '胃肠中心209',
+                '胃肠中心309',
+                '胸外科',
+                '普外疝儿外科',
+                '肾脏内科',
+                '口腔科',
+                '创伤中心2',
+                '骨科创伤',
+                '骨科手足',
+                '普外血管外科',
+                '神经外科504',
+                '神经外科505',
+                '神经外科506',
+                '心脏大血管病中心',
+                '心内科206',
+                '心内科306',
+                '男科',
+                '运动医学科',
+                '肝脾外科' 
+              ) 
+            ORDER BY
+              sip.ELECTR_REQUISITION_NO;
                     """.format(self.schedule_date)
 
         self.logger.info("从surgicalapplicationinfo_port表中导入手术数据到surgicalapplicationinfo_python表中...")
@@ -297,25 +309,64 @@ class ScheduleIO():
         """
         return self.__get_applications(is_arranged=True)
 
-    def get_available_rooms_for_dept(self, apply_dept):
+    def get_available_rooms(self, application):
         """
         获取当前科室的所有可用手术室, 读取科室与手术室的约束表
-        :param apply_dept: 申请科室名称
+        :param application: dict, 申请
         :return: list, 可用手术室id列表
         """
-        sql = """
-        SELECT
-          ao.family_name AS apply_dept, -- 申请科室名称
-          -- ao.family_code AS apply_dept_code, -- 申请科室名称
-          ic.operating_room_id AS room_id-- 手术室ID
-          
-        FROM
-          administrative_office ao
-          JOIN interoperative_constraint ic ON ao.family_code = ic.department 
-        WHERE
-          ic.whether_can_operation = 1 AND ao.family_name = '{}'
-        """.format(apply_dept)
-        return [row['room_id'] for row in query_all_dict(sql)]
+        assert isinstance(application, dict)
+        assert 'apply_dept' in application
+        assert 'is_sp_robot' in application
+        assert 'is_sp_intervention' in application
+        assert 'is_sp_perspective' in application
+        assert 'is_sp_holmium' in application
+        # TODO: id 3232191 同时为两种特殊手术，需要与医院确认是否有这种情况
+        # assert sum([application['is_sp_robot'], application['is_sp_intervention'],
+        #             application['is_sp_perspective'], application['is_sp_holmium']]) <= 1
+
+        apply_dept = application['apply_dept']
+        is_sp_robot = application['is_sp_robot']
+        is_sp_intervention = application['is_sp_intervention']
+        is_sp_perspective = application['is_sp_perspective']
+        is_sp_holmium = application['is_sp_holmium']
+
+        sp_name = None
+        if is_sp_robot:
+            sp_name = '机器人'
+        elif is_sp_intervention:
+            sp_name = '介入手术'
+        elif is_sp_perspective:
+            sp_name = '透视'
+        elif is_sp_holmium:
+            sp_name = '钬激光'
+
+        # 如果没有特殊手术，sp_name为None
+        if sp_name is None:
+            sql = """
+            SELECT
+              ao.family_name AS apply_dept, -- 申请科室名称
+              -- ao.family_code AS apply_dept_code, -- 申请科室名称
+              ic.operating_room_id AS room_id-- 手术室ID
+              
+            FROM
+              administrative_office ao
+              JOIN interoperative_constraint ic ON ao.family_code = ic.department 
+            WHERE
+              ic.whether_can_operation = 1 AND ao.family_name = '{}'
+            """.format(apply_dept)
+            return [row['room_id'] for row in query_all_dict(sql)]
+        else:
+            sql = """
+            SELECT
+              ssr.operating_room_id
+            FROM
+              special_surgical_info ssi
+              JOIN special_surgical_restraint ssr ON ssi.id = ssr.special_id 
+            WHERE
+              ssr.whether_can_operation AND mapping_name = '{}'
+            """.format(sp_name)
+            return [row['operating_room_id'] for row in query_all_dict(sql)]
 
     def write_result_to_db(self, applications):
         """
