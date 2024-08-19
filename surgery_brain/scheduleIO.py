@@ -16,7 +16,7 @@ class ScheduleIO():
         self.logger.info("ScheduleIO initializing...")
 
         self.schedule_date = schedule_date
-        self.__rooms_id_2_info = None
+        self.__total_rooms_info = None
         self.__dept_seq_to_room_id = self.__get_dept_seq_to_room_id_df()
 
         self.__import_surgeries()
@@ -48,22 +48,22 @@ class ScheduleIO():
             REPLACE ( sip.SURGERY_LEVEL_NAME, '级手术', '' ) AS 'surgery_level',-- 手术级别
             -- 四类特殊手术
             CASE
-                
+
                 WHEN sip.robot = '是' THEN
               TRUE ELSE FALSE 
               END AS 'is_sp_robot',-- 是否为机器人特殊手术
             CASE
-                
+
                 WHEN sip.interventional_operation = '是' THEN
               TRUE ELSE FALSE 
               END AS 'is_sp_intervention',-- 是否为介入特殊手术
             CASE
-                
+
                 WHEN sip.perspective = '是' THEN
               TRUE ELSE FALSE 
               END AS 'is_sp_perspective',-- 是否为透视特殊手术
             CASE
-                
+
                 WHEN sip.holmium_laser = '是' THEN
               TRUE ELSE FALSE 
               END AS 'is_sp_holmium',-- 是否为钬激光特殊手术
@@ -78,6 +78,7 @@ class ScheduleIO():
             --        新加字段(用于排程结果记录)
             -- --------------------------------
               FALSE AS 'is_arranged',-- 是否已经被排程
+              FALSE AS 'is_arranged_2',-- 是否已经在二阶段被排程
               NULL AS 'arranged_room_id',-- 安排手术间编号
               NULL AS 'arranged_room_dept',-- 安排手术部
               NULL AS 'arranged_room_name',-- 安排手术间
@@ -162,14 +163,14 @@ class ScheduleIO():
             self.logger.info(f"当前日期是周末，需要映射后，是星期{chinese2num[strWeekday]}")
             return chinese2num[strWeekday]
 
-    def get_room_info_from_id(self, room_id):
+    def get_total_room_info(self):
         """
-        查询room_id对应的手术室信息
+        返回所有的手术室信息
         例如: room_id = 2586 -> ('第一手术部', '01')
         :param room_id: int, 手术室id
         :return: tuple, 手术室信息, (operating_department, real_name)
         """
-        if self.__rooms_id_2_info is None:
+        if self.__total_rooms_info is None:
             sql = """
                 select 
                       id,
@@ -178,10 +179,19 @@ class ScheduleIO():
                 from 
                     operating_room_info
             """
-            self.__rooms_id_2_info = {}
+            self.__total_rooms_info = {}
             for row in query_all_dict(sql):
-                self.__rooms_id_2_info[row["id"]] = (row["operating_department"], row["real_name"])
-        return self.__rooms_id_2_info[int(room_id)]
+                self.__total_rooms_info[row["id"]] = (row["operating_department"], row["real_name"])
+        return self.__total_rooms_info
+
+    def get_room_info_from_id(self, room_id):
+        """
+        查询room_id对应的手术室信息
+        例如: room_id = 2586 -> ('第一手术部', '01')
+        :param room_id: int, 手术室id
+        :return: tuple, 手术室信息, (operating_department, real_name)
+        """
+        return self.get_total_room_info()[int(room_id)]
 
     def __get_dept_seq_to_room_id_df(self):
         """
@@ -348,7 +358,6 @@ class ScheduleIO():
               ao.family_name AS apply_dept, -- 申请科室名称
               -- ao.family_code AS apply_dept_code, -- 申请科室名称
               ic.operating_room_id AS room_id-- 手术室ID
-              
             FROM
               administrative_office ao
               JOIN interoperative_constraint ic ON ao.family_code = ic.department 
@@ -377,6 +386,7 @@ class ScheduleIO():
             assert isinstance(application, dict)
             assert 'id' in application
             assert 'is_arranged' in application
+            assert 'is_arranged_2' in application
             assert 'arranged_room_id' in application
             assert 'arranged_start_time' in application
             assert 'arranged_end_time' in application
@@ -391,6 +401,7 @@ class ScheduleIO():
                 update surgicalapplicationinfo_python
                 set 
                     is_arranged = '{}',
+                    is_arranged_2 = '{}',
                     arranged_room_id = '{}',
                     arranged_room_dept = '{}',
                     arranged_room_name = '{}',
@@ -399,6 +410,7 @@ class ScheduleIO():
                 where
                     id = '{}'
             """.format(application['is_arranged'],
+                       application['is_arranged_2'],
                        application['arranged_room_id'],
                        application['arranged_room_dept'],
                        application['arranged_room_name'],
