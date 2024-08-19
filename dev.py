@@ -28,3 +28,6 @@ if __name__ == "__main__":
 
     print("二阶段抢单排程：")
     schedule.schedule_sec()
+
+    print("可视化排程结果：")
+    schedule.gantt_chart()
