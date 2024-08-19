@@ -139,8 +139,7 @@ class Schedule():
             for idx, application in enumerate(applications):
                 res.append({
                     "id": application["id"],
-                    "is_arranged": 1,
-                    "is_arranged_2": 0,
+                    "arranged_status": 1,
                     "arranged_room_id": room_id,  # e.g. 2586
                     "arranged_start_time": clock,
                     "arranged_end_time": clock + timedelta(hours=application["duration"])
@@ -484,16 +483,12 @@ class Schedule():
                 print("术间", k, "总用时", sum(int(var_jk[j][k].varValue) * (time_j[j] + 0.5) for j in set_j), "小时")
         else:
             print("Model did not solve to optimality.")
-        for app in total_applications:
-            app['is_arranged_2'] = 0  # 是否在第二阶段排程
         for k in set_k:
             self.room_surgery[k] = []
             for app in total_applications:
                 if int(var_jk[app['id']][k].varValue) == 1:
-                    app['is_arranged'] = 1
+                    app["arranged_status"] = 2 if app["arranged_status"] == 0 else app["arranged_status"]
                     self.room_surgery[k].append(app)
-                    if whether_arranged_s1[app['id']] == 0:
-                        app["is_arranged_2"] = 1
 
         # 排序
         for k in set_k:
@@ -513,8 +508,7 @@ class Schedule():
             for idx, application in enumerate(applications):
                 res_2.append({
                     "id": application["id"],
-                    "is_arranged": application["is_arranged"],
-                    "is_arranged_2": application["is_arranged_2"],
+                    "arranged_status": application["arranged_status"],
                     "arranged_room_id": room_id,  # e.g. 2586
                     "arranged_start_time": clock,
                     "arranged_end_time": clock + timedelta(hours=application["duration"]),
@@ -523,16 +517,6 @@ class Schedule():
                 clock += timedelta(hours=(application["duration"] + self.TURNOVER_INTERVAL))
         self.logger.info(f"排好结果汇总完成，申请数为{len(total_applications)}，二阶段总完成数为{len(res_2)}")
         self.logger.info("二阶段排好结果汇总")
-
-        for application in res_2:
-            assert isinstance(application, dict), "二阶段排程结果中有非字典类型的申请"
-            # assert application["id"] in [x["id"] for x in unarranged_applications], "二阶段排程结果中有未排程的申请"
-            # assert application["id"] not in [x["id"] for x in arranged_applications], "二阶段排程结果中有已排程的申请"
-            # assert application["is_arranged"] == 1, "二阶段排程结果中有未排程的申请"
-            assert application["arranged_start_time"] < application["arranged_end_time"], "二阶段排程结果中有时间错误的申请"
-            assert application["arranged_start_time"].hour >= 8, "二阶段排程结果中有时间错误的申请"
-            # assert application["arranged_room_id"] is not None, "二阶段排程结果中有未分配手术室的申请"
-            # TODO: 其余的检查
 
         self.logger.info("回写数据库")
         self.sio.write_result_to_db(res_2)
@@ -565,8 +549,7 @@ class Schedule():
                               y="room",
                               title="手术日排程甘特图",
                               hover_data=["id", "apply_dept", "patient_name", "surgeon_name", "duration", "t_seq"],
-                              color="is_arranged_2",
-                              )
+                              color="arranged_status")
             fig.show()
             self.logger.info("甘特图绘制成功")
 

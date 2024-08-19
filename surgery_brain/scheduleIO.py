@@ -82,8 +82,7 @@ class ScheduleIO():
             -- --------------------------------
             --        新加字段(用于排程结果记录)
             -- --------------------------------
-              FALSE AS 'is_arranged',-- 是否已经被排程
-              FALSE AS 'is_arranged_2',-- 是否已经在二阶段被排程
+              FALSE AS 'arranged_status',-- 排程状态0:未排程,1:一阶段被排程,2:二阶段被排程, 3:三阶段被排程
               NULL AS 'arranged_room_id',-- 安排手术间编号
               NULL AS 'arranged_room_dept',-- 安排手术部
               NULL AS 'arranged_room_name',-- 安排手术间
@@ -282,7 +281,7 @@ class ScheduleIO():
 
     def __get_applications(self, is_arranged):
         """
-        依据is_arranged，获取未安排或者已安排的手术申请
+        依据arranged_status，获取未安排或者已安排的手术申请
         :return: list[dict], 未安排手术的申请列表
         """
         sql = """
@@ -291,8 +290,8 @@ class ScheduleIO():
             from 
                 surgicalapplicationinfo_python
             where
-                surgery_date like '{}%' AND is_arranged = {}
-                               """.format(self.schedule_date, is_arranged)
+                surgery_date like '{}%' AND arranged_status {}
+                               """.format(self.schedule_date, "> 0" if is_arranged else "= 0")
 
         applications = query_all_dict(sql)
         for application in applications:
@@ -303,7 +302,7 @@ class ScheduleIO():
             # todo: 当前还没有医生代码，暂时用医生姓名+hashcode代替
             application['surgeon_code'] = f"{application['surgeon_code']}({str(hash(application['surgeon_code']))[:6]})"
 
-            if application['is_arranged']:
+            if application['arranged_status'] != 0:
                 application['arranged_start_time'] = datetime.datetime.strptime(application['arranged_start_time'],
                                                                                 "%Y-%m-%d %H:%M:%S")
                 application['arranged_end_time'] = datetime.datetime.strptime(application['arranged_end_time'],
@@ -391,8 +390,6 @@ class ScheduleIO():
         for application in applications:
             assert isinstance(application, dict)
             assert 'id' in application
-            assert 'is_arranged' in application
-            assert 'is_arranged_2' in application
             assert 'arranged_room_id' in application
             assert 'arranged_start_time' in application
             assert 'arranged_end_time' in application
@@ -406,8 +403,7 @@ class ScheduleIO():
             sql = """
                 update surgicalapplicationinfo_python
                 set 
-                    is_arranged = '{}',
-                    is_arranged_2 = '{}',
+                    arranged_status = {},
                     arranged_room_id = '{}',
                     arranged_room_dept = '{}',
                     arranged_room_name = '{}',
@@ -415,8 +411,7 @@ class ScheduleIO():
                     arranged_end_time = '{}'
                 where
                     id = '{}'
-            """.format(application['is_arranged'],
-                       application['is_arranged_2'],
+            """.format(application['arranged_status'],
                        application['arranged_room_id'],
                        application['arranged_room_dept'],
                        application['arranged_room_name'],
