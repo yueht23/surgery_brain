@@ -44,7 +44,11 @@ class ScheduleIO():
             sip.SURGERY_DR_CODE AS 'surgeon_code',-- 主刀医生id
             sip.SURGERY_TABLE_NO AS 't_seq',-- 台序
             REPLACE ( sip.SURGERY_DURATION, '-小时', '' ) AS 'duration',-- 预估手术时长
-            sip.surgery AS 'day_surgery',-- 是否日间手术
+            CASE
+                WHEN sip.surgery = '是' THEN
+                TRUE ELSE FALSE
+            END AS 'is_day_surgery',-- 是否日间手术
+            
             sip.SURGERY_WOUND_CATEG_CODE AS 'incision_type',-- 切口类型
             REPLACE ( sip.SURGERY_LEVEL_NAME, '级手术', '' ) AS 'surgery_level',-- 手术级别
             -- 四类特殊手术
@@ -272,7 +276,8 @@ class ScheduleIO():
         else:
             room_id = seq_df["room_id"].values[0]
             weight = seq_df["weight"].values[0]
-            self.logger.info("当前科室{}{}当日对应的手术室为{}".format(dept, seq_alphabet, room_id))
+            self.logger.info(
+                f"科室{dept}{seq_alphabet}当日对应的手术室为{self.get_room_info_from_id(room_id)}{room_id}, 权重为{weight}")
             return room_id, weight
 
     def __get_applications(self, is_arranged):
