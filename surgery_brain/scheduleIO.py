@@ -4,6 +4,7 @@ import datetime
 from common.sql_util import query_all_dict, execute_sql, get_sqlalchemy_engine
 from common.logger import Logger
 import re
+from tqdm import tqdm
 
 
 class ScheduleIO():
@@ -393,7 +394,7 @@ class ScheduleIO():
             assert application['arranged_start_time'] < application['arranged_end_time']
             # TODO: 其余数据合规性检查
 
-        for application in applications:
+        for application in tqdm(applications):
             room_dept, room_name = self.get_room_info_from_id(application['arranged_room_id'])
             application['arranged_room_dept'] = room_dept  # e.g. 第一手术部
             application['arranged_room_name'] = room_name  # e.g. 01
