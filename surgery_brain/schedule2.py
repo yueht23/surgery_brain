@@ -177,8 +177,8 @@ class Schedule():
             df_day_surgery)
         df_elective_surgery["elective_percentage"] = df_elective_surgery['inpatient_serial'].rank(
             method='average') / len(df_elective_surgery)
-        print(df_day_surgery['day_percentage'], df_day_surgery['inpatient_serial'])
-        print(df_elective_surgery['elective_percentage'], df_elective_surgery['inpatient_serial'])
+
+        self.logger.info("二阶段权重构造")
         for application in total_applications:
             self.logger.info("#" * 40)
             self.logger.info("#" * 40)
@@ -196,16 +196,19 @@ class Schedule():
 
             # 抢单失败次数
             weight2 += 2 * application["attempt_times"]
+
             # 日间手术
             if application["is_day_surgery"]:
                 weight2 += 3
-                for row_day_app in range(len(df_day_surgery)):
-                    if df_day_surgery.iloc[row_day_app]["inpatient_serial"] == application["inpatient_serial"]:
-                        weight2 += df_day_surgery.iloc[row_day_app]['day_percentage']
+                for _, row_day_app in df_day_surgery.iterrows():
+                    if row_day_app["id"] == application["id"]:
+                        weight2 += row_day_app['day_percentage']
+            # 择期手术
             else:
-                for row_elective_app in range(len(df_elective_surgery)):
-                    if df_elective_surgery.iloc[row_elective_app]["inpatient_serial"] == application["inpatient_serial"]:
-                        weight2 += df_elective_surgery.iloc[row_elective_app]['elective_percentage']
+                for _, row_elective_app in df_elective_surgery.iterrows():
+                    if row_elective_app["id"] == application["id"]:
+                        weight2 += row_elective_app['elective_percentage']
+
             # 国考四级手术
             weight2 += 3 if application["surgery_level"] == "4" else 0
 
@@ -217,6 +220,7 @@ class Schedule():
 
             application["weight2"] = weight2
             self.logger.info("当前申请的权重为{}".format(weight2))
+        self.logger.info("二阶段权重构造完成")
         """
          变量/参数：
          set_i：向量：医生的集合
@@ -518,7 +522,6 @@ class Schedule():
                 })
                 clock += timedelta(hours=(application["duration"] + self.TURNOVER_INTERVAL))
         self.logger.info(f"排好结果汇总完成，申请数为{len(total_applications)}，二阶段总完成数为{len(res_2)}")
-
         self.logger.info("二阶段排好结果汇总")
 
         for application in res_2:
