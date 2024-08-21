@@ -135,12 +135,13 @@ class ScheduleIO():
         surgery_table = pd.DataFrame(query_all_dict(sql))
 
         if not surgery_table.empty:
-            self.logger.info("手术数据导入完成，共{}条数据".format(surgery_table.shape[0]))
+            self.logger.info("手术数据导入中...,共{}条数据".format(surgery_table.shape[0]))
             # 完成数据类型转换
             surgery_table.to_sql('surgicalapplicationinfo_python',
                                  get_sqlalchemy_engine(),
                                  if_exists='replace',
                                  index=False)
+            self.logger.info("手术数据导入完成")
         else:
             raise ValueError("没有需要导入的手术，无需排程，检查日期是否正确，当日是否有手术申请")
 
@@ -389,12 +390,12 @@ class ScheduleIO():
         """
         for application in applications:
             assert isinstance(application, dict)
-            assert 'id' in application
-            assert 'arranged_room_id' in application
-            assert 'arranged_start_time' in application
-            assert 'arranged_end_time' in application
+            assert application.keys() == {'id',
+                                          'arranged_status',
+                                          'arranged_room_id',
+                                          'arranged_start_time',
+                                          'arranged_end_time'}
             assert application['arranged_start_time'] < application['arranged_end_time']
-            # TODO: 其余数据合规性检查
 
         for application in tqdm(applications):
             room_dept, room_name = self.get_room_info_from_id(application['arranged_room_id'])
