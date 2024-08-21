@@ -512,7 +512,6 @@ class Schedule():
                     "arranged_room_id": room_id,  # e.g. 2586
                     "arranged_start_time": clock,
                     "arranged_end_time": clock + timedelta(hours=application["duration"]),
-                    "apply_dept": application["apply_dept"]
                 })
                 clock += timedelta(hours=(application["duration"] + self.TURNOVER_INTERVAL))
         self.logger.info(f"排好结果汇总完成，申请数为{len(total_applications)}，二阶段总完成数为{len(res_2)}")
