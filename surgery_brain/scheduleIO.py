@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import pandas as pd
-import datetime
+from datetime import datetime
 from common.sql_util import query_all_dict, execute_sql, get_sqlalchemy_engine
 from common.logger import Logger
 import re
@@ -17,6 +17,8 @@ class ScheduleIO():
         self.logger.info("ScheduleIO initializing...")
 
         self.schedule_date = schedule_date
+        assert (datetime.strptime(schedule_date, "%Y-%m-%d") >= datetime.
+                strptime("2024-09-06", "%Y-%m-%d")), "排程日期必须在2024-09-06之后"
         self.__total_rooms_info = None
         self.__dept_seq_to_room_id = self.__get_dept_seq_to_room_id_df()
 
@@ -31,9 +33,11 @@ class ScheduleIO():
         :return:
         """
         sql = """
-            SELECT DISTINCT
+            SELECT DISTINCT-- 去重
             -- --------------------------------
-            --         原手术申请表字段
+            -- --------------------------------
+            --       原手术申请表字段        --
+            -- --------------------------------
             -- --------------------------------
             sip.ELECTR_REQUISITION_NO AS 'id',-- 手术申请单号
             sip.SURGERY_DATE AS 'surgery_date',-- 拟手术日期
@@ -44,43 +48,61 @@ class ScheduleIO():
             sip.SURGERY_DR_CODE AS 'surgeon_code',-- 主刀医生id
             sip.SURGERY_TABLE_NO AS 't_seq',-- 台序
             REPLACE ( sip.SURGERY_DURATION, '-小时', '' ) AS 'duration',-- 预估手术时长
+            (
+              sip.INFECTIOUS_NONE = '1' 
+              OR sip.INFECTIOUS_HIV = '1' 
+              OR sip.INFECTIOUS_HBV = '1' 
+              OR sip.INFECTIOUS_HCV = '1' 
+              OR sip.INFECTIOUS_AIR = '1' 
+              OR sip.INFECTIOUS_OTHER = '1' 
+            ) AS 'is_infected',-- 是否感染
+            ( sip.oper_typename <> '手术' ) AS 'is_operation',-- 操作非手术
             CASE
+                
+                WHEN sip.is_mininvasive = '0' THEN
+                FALSE 
+                  WHEN sip.is_mininvasive = '1' THEN
+                TRUE ELSE NULL 
+              END AS 'is_mini_invasive',-- 是否微创
+            CASE
+                
+                WHEN sip.IN_STATE = '0' THEN
+                FALSE 
+                  WHEN sip.IN_STATE = '1' THEN
+                TRUE ELSE NULL 
+              END AS 'is_admitted',-- 是否已入院, 三阶段排程要用
+            CASE
+                
                 WHEN sip.surgery = '是' THEN
-                TRUE ELSE FALSE
-            END AS 'is_day_surgery',-- 是否日间手术
-            
-            sip.SURGERY_WOUND_CATEG_CODE AS 'incision_type',-- 切口类型
-            REPLACE ( sip.SURGERY_LEVEL_NAME, '级手术', '' ) AS 'surgery_level',-- 手术级别
+                TRUE ELSE FALSE 
+              END AS 'is_day_surgery',-- 是否日间手术
+              sip.SURGERY_WOUND_CATEG_CODE AS 'incision_type',-- 切口类型
+              REPLACE ( sip.SURGERY_LEVEL_NAME, '级手术', '' ) AS 'surgery_level',-- 手术级别
             -- 四类特殊手术
             CASE
-
+                
                 WHEN sip.robot = '是' THEN
-              TRUE ELSE FALSE 
+                TRUE ELSE FALSE 
               END AS 'is_sp_robot',-- 是否为机器人特殊手术
             CASE
-
+                
                 WHEN sip.interventional_operation = '是' THEN
-              TRUE ELSE FALSE 
+                TRUE ELSE FALSE 
               END AS 'is_sp_intervention',-- 是否为介入特殊手术
             CASE
-
+                
                 WHEN sip.perspective = '是' THEN
-              TRUE ELSE FALSE 
+                TRUE ELSE FALSE 
               END AS 'is_sp_perspective',-- 是否为透视特殊手术
             CASE
-
+                
                 WHEN sip.holmium_laser = '是' THEN
-              TRUE ELSE FALSE 
+                TRUE ELSE FALSE 
               END AS 'is_sp_holmium',-- 是否为钬激光特殊手术
-            -- -----------------------------------
-            -- 如下字段暂时读不到，暂时新建字段，然后生成
-            -- -----------------------------------
-              TRUE AS 'is_admitted',-- 是否已入院, 三阶段排程要用
-              FALSE AS 'is_infected',-- 是否感染
-              FALSE AS 'is_operation',-- 操作非手术
-              FALSE AS 'is_mini_invasive',-- 是否微创
             -- --------------------------------
-            --        新加字段(用于排程结果记录)
+            -- --------------------------------
+            --  新加字段(用于排程结果记录)   --
+            -- --------------------------------
             -- --------------------------------
               FALSE AS 'arranged_status',-- 排程状态0:未排程,1:一阶段被排程,2:二阶段被排程, 3:三阶段被排程
               NULL AS 'arranged_room_id',-- 安排手术间编号
@@ -94,7 +116,7 @@ class ScheduleIO():
               surgicalapplication_info_port sip
               INNER JOIN doctor_info di ON di.doctor = sip.SURGERY_DR_NAME 
             WHERE
-              sip.SURGERY_DATE LIKE '{}%' 
+              sip.SURGERY_DATE LIKE '2024-09-06%' 
               AND ( sip.scheduling_state = FALSE OR sip.scheduling_state IS NULL ) 
               AND sip.SURGERY_DEPT_NAME IN ( '第一手术部', '第二手术部', '日间手术室' ) 
               AND sip.APPLY_DEPT_NAME IN (
@@ -151,7 +173,7 @@ class ScheduleIO():
         :return: int, 星期几，其中1-5代表周一到周五，6-7代表周六到周日
         """
         chinese2num = {'星期一': 1, '星期二': 2, '星期三': 3, '星期四': 4, '星期五': 5, '星期六': 6, '星期日': 7}
-        date = datetime.datetime.strptime(self.schedule_date, "%Y-%m-%d")
+        date = datetime.strptime(self.schedule_date, "%Y-%m-%d")
         if date.weekday() in [0, 1, 2, 3, 4]:
             self.logger.info(f"当前日期是工作日,是星期{date.weekday() + 1}")
             return date.weekday() + 1
@@ -300,14 +322,11 @@ class ScheduleIO():
             application['seq_alphabet'] = application['t_seq'][0]
             application['seq_number'] = int(application['t_seq'][1:])
 
-            # todo: 当前还没有医生代码，暂时用医生姓名+hashcode代替
-            application['surgeon_code'] = f"{application['surgeon_code']}({str(hash(application['surgeon_code']))[:6]})"
-
             if application['arranged_status'] != 0:
-                application['arranged_start_time'] = datetime.datetime.strptime(application['arranged_start_time'],
-                                                                                "%Y-%m-%d %H:%M:%S")
-                application['arranged_end_time'] = datetime.datetime.strptime(application['arranged_end_time'],
-                                                                              "%Y-%m-%d %H:%M:%S")
+                application['arranged_start_time'] = datetime.strptime(application['arranged_start_time'],
+                                                                       "%Y-%m-%d %H:%M:%S")
+                application['arranged_end_time'] = datetime.strptime(application['arranged_end_time'],
+                                                                     "%Y-%m-%d %H:%M:%S")
 
         return applications
 
@@ -337,9 +356,10 @@ class ScheduleIO():
         assert 'is_sp_intervention' in application
         assert 'is_sp_perspective' in application
         assert 'is_sp_holmium' in application
-        # TODO: id 3232191 同时为两种特殊手术，需要与医院确认是否有这种情况
-        # assert sum([application['is_sp_robot'], application['is_sp_intervention'],
-        #             application['is_sp_perspective'], application['is_sp_holmium']]) <= 1
+
+        if (application['is_sp_robot'] + application['is_sp_intervention'] +
+                application['is_sp_perspective'] + application['is_sp_holmium'] > 1):
+            self.logger.warning(f"手术申请单号{application['id']}同时为两种特殊手术，需要与医院确认是否有这种情况")
 
         apply_dept = application['apply_dept']
         is_sp_robot = application['is_sp_robot']
