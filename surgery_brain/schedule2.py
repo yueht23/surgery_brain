@@ -73,7 +73,6 @@ class Schedule():
         waiting_list = self.sio.get_unarranged_applications()
         self.logger.info("waiting list获取成功")
         self.logger.info("waiting list长度为{}".format(len(waiting_list)))
-        # TODO: 一阶段排程还没有考虑HIV等感染性疾病的传播问题
         self.logger.warning("当前一阶段排程还没有考虑HIV等感染性疾病的传播问题")
 
         for application in waiting_list:
@@ -82,6 +81,10 @@ class Schedule():
             self.logger.info("#" * 40)
 
             self.logger.info("当前申请{}".format(application))
+
+            if application['is_infected']:
+                self.logger.info("当前申请为感染性疾病，不参与一轮排程")
+                continue
 
             if self.__check_doctor_overwork(application['surgeon_code']):
                 self.logger.info("医生{}已经超过工作量".format(application['surgeon_code']))
@@ -527,7 +530,10 @@ class Schedule():
         """
         try:
             import plotly.express as px
+            import plotly.io as pio
             import pandas as pd
+
+            pio.renderers.default = "browser"
 
             self.logger.info("开始绘制甘特图...")
             self.logger.info("获取已排程的申请...")
