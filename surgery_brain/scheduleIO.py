@@ -42,7 +42,7 @@ class ScheduleIO():
             sip.ELECTR_REQUISITION_NO AS 'id',-- 手术申请单号
             sip.SURGERY_DATE AS 'surgery_date',-- 拟手术日期
             sip.SURGERY_OPER_NAME AS 'operation_name',-- 手术名称 NOTE: 排程用不到，但是前端需要
-            sip.INHOSP_INDEX_NO AS 'admission_number',-- 住院号 NOTE: 排程用不到，但是前端需要
+            sip.INHOSP_INDEX_NO AS 'admission_number',-- 住院号 NOTE: 排程用不到，但是前端需要, 其与inpatient_serial相同
             sip.INHOSP_INDEX_NO AS 'inpatient_serial',-- 住院流水号
             sip.PAT_NAME AS 'patient_name',-- 患者姓名
             sip.APPLY_DEPT_NAME AS 'apply_dept',-- 申请科室名称
