@@ -104,20 +104,22 @@ class ScheduleIO():
             --  新加字段(用于排程结果记录)   --
             -- --------------------------------
             -- --------------------------------
-              FALSE AS 'arranged_status',-- 排程状态0:未排程,1:一阶段被排程,2:二阶段被排程, 3:三阶段被排程
-              NULL AS 'arranged_room_id',-- 安排手术间编号
-              NULL AS 'arranged_room_dept',-- 安排手术部
-              NULL AS 'arranged_room_name',-- 安排手术间
-              NULL AS 'arranged_start_time',-- 安排手术开始时间
-              NULL AS 'arranged_end_time',-- 安排手术结束时间
+              sip.scheduling_state AS 'arranged_status',-- 排程状态0:未排程,1:一阶段被排程,2:二阶段被排程, 3:三阶段被排程
+              si.arrange_operating_room_number AS 'arranged_room_id',-- 安排手术间编号
+              si.arrange_operating_number AS 'arranged_room_dept',-- 安排手术部
+              si.arrange_operating_room AS 'arranged_room_name',-- 安排手术间
+              si.operation_start_time AS 'arranged_start_time',-- 安排手术开始时间
+              si.operation_end_time AS 'arranged_end_time', -- 安排手术结束时间
+              -- TODO: 失败次数这个先不管
               0 AS 'attempt_times' -- 排程尝试次数
               
             FROM
               surgicalapplication_info_port sip
-              INNER JOIN doctor_info di ON di.doctor = sip.SURGERY_DR_NAME 
+              INNER JOIN doctor_info di ON di.doctor = sip.SURGERY_DR_NAME
+              LEFT JOIN surgicalapplicationinfo si ON sip.id = si.application_number  -- 已经排好的手术 
             WHERE
-              sip.SURGERY_DATE LIKE '2024-09-06%' 
-              AND ( sip.scheduling_state = FALSE OR sip.scheduling_state IS NULL ) 
+              sip.SURGERY_DATE LIKE '{}%' 
+              -- AND ( sip.scheduling_state = FALSE OR sip.scheduling_state IS NULL ) 
               AND sip.SURGERY_DEPT_NAME IN ( '第一手术部', '第二手术部', '日间手术室' ) 
               AND sip.APPLY_DEPT_NAME IN (
                 '产科',
