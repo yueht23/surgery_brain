@@ -21,17 +21,17 @@ class ScheduleIO():
                 strptime("2024-09-06", "%Y-%m-%d")), "排程日期必须在2024-09-06之后"
         self.__total_rooms_info = None
         self.__dept_seq_to_room_id = self.__get_dept_seq_to_room_id_df()
-
-        self.__import_surgeries()
+        self.sqlalchemy_engine = get_sqlalchemy_engine()
         self.logger.info("ScheduleIO initialized.")
 
-    def __import_surgeries(self):
+    def import_surgeries(self):
         """
         从surgericalapplicationinfo_port表中导入手术并预处理手术数据到
         surgicalapplicationinfo_python表中，方便后续排程
-        注意：此方法只能在排程前调用一次，不可重复调用，且不对外暴露
         :return:
         """
+        execute_sql("DROP TABLE IF EXISTS surgicalapplicationinfo_python")
+
         sql = """
             SELECT DISTINCT-- 去重
             -- --------------------------------
@@ -118,7 +118,7 @@ class ScheduleIO():
             FROM
               surgicalapplication_info_port sip
               INNER JOIN doctor_info di ON di.doctor = sip.SURGERY_DR_NAME
-              LEFT JOIN surgicalapplicationinfo si ON sip.id = si.application_number  -- 已经排好的手术 
+              LEFT JOIN surgicalapplicationinfo si ON sip.ELECTR_REQUISITION_NO = si.application_number  -- 已经排好的手术 
             WHERE
               sip.SURGERY_DATE LIKE '{}%' 
               -- AND ( sip.scheduling_state = FALSE OR sip.scheduling_state IS NULL ) 
@@ -164,7 +164,7 @@ class ScheduleIO():
             self.logger.info("手术数据导入中...,共{}条数据".format(surgery_table.shape[0]))
             # 完成数据类型转换
             surgery_table.to_sql('surgicalapplicationinfo_python',
-                                 get_sqlalchemy_engine(),
+                                 self.sqlalchemy_engine,
                                  if_exists='replace',
                                  index=False)
             self.logger.info("手术数据导入完成")
@@ -444,3 +444,67 @@ class ScheduleIO():
                        application['arranged_end_time'],
                        application['id'])
             execute_sql(sql)
+
+    def sync_info_python_to_info(self, drop_ratio=0):
+        """
+        将surgicalapplicationinfo_python表中的数据同步到surgicalapplicationinfo中，同时删除一部分
+        注意：此方法只在开发阶段使用，不要在生产环境使用
+        :param drop_ratio:  float, 删除比例
+        :return:
+        """
+        # read data from surgicalapplicationinfo_python
+        sql = """
+            select 
+                *
+            from 
+                surgicalapplicationinfo_python
+            where
+                arranged_status <> 0 AND surgery_date like '{}%'
+        """.format(self.schedule_date)
+
+        df_python = pd.DataFrame(query_all_dict(sql))
+        # rename columns to match the columns in surgicalapplicationinfo
+        rename_dict = {
+            'id': 'application_number',
+            'arranged_room_id': 'arrange_operating_room_number',
+            'arranged_room_dept': 'arrange_operating_number',
+            'arranged_room_name': 'arrange_operating_room',
+            'arranged_start_time': 'operation_start_time',
+            'arranged_end_time': 'operation_end_time'
+        }
+
+        df_python.rename(columns=rename_dict, inplace=True)
+
+        # drop some data
+        if drop_ratio > 0:
+            df_python = df_python.sample(frac=1 - drop_ratio)
+
+        # write to surgicalapplicationinfo
+        df_python.to_sql('surgicalapplicationinfo', self.sqlalchemy_engine, if_exists='replace', index=False)
+
+        # update surgicalapplicationinfo_port scheduling_state as df_python arranged_status
+        for row in df_python.itertuples():
+            sql = """
+                update surgicalapplication_info_port
+                set 
+                    scheduling_state = {}
+                where
+                    ELECTR_REQUISITION_NO = '{}'
+            """.format(row.arranged_status, row.application_number)
+            execute_sql(sql)
+
+    def reset_info_port(self):
+        """
+        重置surgicalapplication_info_port表中的scheduling_state字段，将所有手术的scheduling_state字段置为0
+        注意：此方法只在开发阶段使用，不要在生产环境使用
+        :return:
+        """
+        sql = """
+            update surgicalapplication_info_port
+            set 
+                scheduling_state = 0
+            where
+                SURGERY_DATE like '{}%'
+        """.format(self.schedule_date)
+        execute_sql(sql)
+        self.logger.info("surgicalapplication_info_port表中的scheduling_state字段重置完成")
