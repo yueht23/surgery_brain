@@ -69,8 +69,10 @@ class Schedule():
         """
 
         self.logger.info("开始确定性排程...")
+        self.sio.import_surgeries()
         self.logger.info("获取waiting list...")
         waiting_list = self.sio.get_unarranged_applications()
+        assert self.sio.get_arranged_applications() == [], "一阶段排程前数据库中已有排程"
         self.logger.info("waiting list获取成功")
         self.logger.info("waiting list长度为{}".format(len(waiting_list)))
         self.logger.warning("当前一阶段排程还没有考虑HIV等感染性疾病的传播问题")
@@ -160,6 +162,7 @@ class Schedule():
         二期的手术日抢单排程
         :return: None
         """
+        self.sio.import_surgeries()
         arranged_applications = self.sio.get_arranged_applications()
         unarranged_applications = self.sio.get_unarranged_applications()
         total_applications = arranged_applications + unarranged_applications
