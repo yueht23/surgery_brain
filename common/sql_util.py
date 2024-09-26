@@ -71,7 +71,7 @@ elif env == 'default':
                 f"{dialect}://"
                 f"{db_settings.get('USER', '')}:{db_settings.get('PASSWORD', '')}@"
                 f"{db_settings.get('HOST', 'localhost')}:{db_settings.get('PORT', '')}/"
-                f"{db_settings['NAME']}"
+                f"{db_settings['NAME']}?charset=utf8mb4"
             )
 
         # Create the SQLAlchemy engine
