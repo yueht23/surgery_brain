@@ -189,9 +189,13 @@ class ScheduleIO():
                     """.format(self.schedule_date)
             temp_data = query_all_dict(sql)
             mapping_date = pd.DataFrame(temp_data)
-            strWeekday = mapping_date["week"][0]
-            self.logger.info(f"当前日期是周末，需要映射后，是星期{chinese2num[strWeekday]}")
-            return chinese2num[strWeekday]
+
+            if mapping_date.empty or mapping_date.shape[0] != 1:
+                raise ValueError("数据库中不存在该日期的映射信息，请检查数据库")
+            else:
+                strWeekday = mapping_date["week"][0]
+                self.logger.info(f"当前日期是周末，需要映射后，是星期{chinese2num[strWeekday]}")
+                return chinese2num[strWeekday]
 
     def get_total_room_info(self):
         """
