@@ -161,6 +161,8 @@ class ScheduleIO():
 
         if not surgery_table.empty:
             self.logger.info("手术数据导入中...,共{}条数据".format(surgery_table.shape[0]))
+            self.logger.info("已排手术{}条".format(surgery_table.loc[surgery_table["arranged_status"] > 0].shape[0]))
+            self.logger.info("未排手术{}条".format(surgery_table.loc[surgery_table["arranged_status"] == 0].shape[0]))
             # 完成数据类型转换
             surgery_table.to_sql('surgicalapplicationinfo_python',
                                  self.sqlalchemy_engine,
