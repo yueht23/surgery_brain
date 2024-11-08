@@ -9,7 +9,7 @@ pyinstaller.exe --collect-data pulp a.py -y
 echo "package the project"
 
 # step 3. copy the data base
-Copy-Item -Path .\surgery_brain\Data\ -Destination .\dist\a\surgery_brain\ -Recurse
+# Copy-Item -Path .\surgery_brain\Data\ -Destination .\dist\a\surgery_brain\ -Recurse
 echo "copy the data base"
 
 # step 4. mkdir the logs
