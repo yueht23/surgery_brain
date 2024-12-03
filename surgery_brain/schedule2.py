@@ -78,10 +78,7 @@ class Schedule():
         self.logger.warning("当前一阶段排程还没有考虑HIV等感染性疾病的传播问题")
 
         for application in waiting_list:
-            self.logger.info("#" * 40)
-            self.logger.info("#" * 40)
-            self.logger.info("#" * 40)
-
+            self.logger.info("")
             self.logger.info("当前申请{}".format(application))
 
             if application['is_infected']:
@@ -174,7 +171,7 @@ class Schedule():
         # 待排手术权重重新赋值
         day_surgery = [app for app in unarranged_applications if app['is_day_surgery']]
         elective_surgery = [app for app in unarranged_applications if not app['is_day_surgery']]
-        df_unarranged_applications = pd.DataFrame(unarranged_applications)
+        # df_unarranged_applications = pd.DataFrame(unarranged_applications)
         df_day_surgery = pd.DataFrame(day_surgery)
         df_elective_surgery = pd.DataFrame(elective_surgery)
         df_day_surgery["day_percentage"] = df_day_surgery['inpatient_serial'].rank(method='average',
@@ -185,10 +182,9 @@ class Schedule():
 
         self.logger.info("二阶段权重构造")
         for application in total_applications:
-            self.logger.info("#" * 40)
-            self.logger.info("#" * 40)
-            self.logger.info("#" * 40)
+            self.logger.info("")
             self.logger.info("当前待排申请{}".format(application))
+
             weight2 = 0.0
 
             # 特殊手术
@@ -365,12 +361,12 @@ class Schedule():
         unavailable_rooms = {}  # 不可进行手术的术间
         for application in total_applications:
             unavailable_rooms[application['id']] = list(set(set_k) - set(self.sio.get_available_rooms(application)))
-            # print("手术编号", application['id'], "可行术间", self.sio.get_available_rooms(application), "是否在第一阶段固定", whether_arranged_s1[j])
+            # self.logger.info("手术编号", application['id'], "可行术间", self.sio.get_available_rooms(application), "是否在第一阶段固定", whether_arranged_s1[j])
             para_ij[application['surgeon_code']][application['id']] = 1
             para_mj[application['apply_dept']][application['id']] = 1
 
         for j in set_j:
-            # print("手术编号", j, "不可行术间", unavailable_rooms[j], "是否在第一阶段固定", whether_arranged_s1[j])
+            # self.logger.info("手术编号", j, "不可行术间", unavailable_rooms[j], "是否在第一阶段固定", whether_arranged_s1[j])
             if whether_arranged_s1[j] == 0:
                 model += (pulp.lpSum([var_jk[j][k] for k in unavailable_rooms[j]]) == 0,
                           'ConditionOf' + 'Surgery' + str(j))
@@ -382,12 +378,11 @@ class Schedule():
 
         # 添加【约束】：第一阶段的手术固定在之前的术间
         for application in arranged_applications:
-            room_id, init_weight = self.sio.get_room_id_and_weight(application['apply_dept'],
-                                                                   application['seq_alphabet'])
+            room_id = application['arranged_room_id']
             startTime_k[str(room_id)] += application["duration"] + 0.5
             arranged_room_depts[str(room_id)].append(application['apply_dept'])
             arranged_dept_rooms[application['apply_dept']].append(str(room_id))
-            arranged_doc_roomDepts[application['surgeon_code']].append(total_room_info[room_id][0])
+            arranged_doc_roomDepts[application['surgeon_code']].append(total_room_info[int(room_id)][0])
 
             model += (var_jk[application['id']][str(room_id)] == 1,
                       'Arranged' + 'Surgery' + str(application['id']))
@@ -482,13 +477,15 @@ class Schedule():
             for j in set_j:
                 for k in set_k:
                     if var_jk[j][k].varValue is not None and int(var_jk[j][k].varValue) == 1:
-                        print(f"var_jk[{j}][{k}] = {var_jk[j][k].varValue}")
-                        # print(j, set_weight[j], self.sio.get_available_rooms(j))
-                        print("是否在第一阶段已固定", whether_arranged_s1[j])
+                        # self.logger.info(f"var_jk[{j}][{k}] = {var_jk[j][k].varValue}")
+                        # self.logger.info(j, set_weight[j], self.sio.get_available_rooms(j))
+                        # self.logger.info("是否在第一阶段已固定", whether_arranged_s1[j])
+                        pass
             for k in set_k:
-                print("术间", k, "总用时", sum(int(var_jk[j][k].varValue) * (time_j[j] + 0.5) for j in set_j), "小时")
+                # self.logger.info("术间", k, "总用时", sum(int(var_jk[j][k].varValue) * (time_j[j] + 0.5) for j in set_j), "小时")
+                pass
         else:
-            print("Model did not solve to optimality.")
+            self.logger.info("Model did not solve to optimality.")
         for k in set_k:
             self.room_surgery[k] = []
             for app in total_applications:
@@ -498,13 +495,21 @@ class Schedule():
 
         # 排序
         for k in set_k:
+            for app in self.room_surgery[k]:
+                if not isinstance(app['arranged_start_time'], datetime):
+                    try:
+                        app['arranged_start_time'] = datetime.strptime(app['arranged_start_time'], "%Y-%m-%d %H:%M:%S")
+                    except Exception as e:
+                        # TODO: 需要排查，时间无法转换为datetime的原因
+                        self.logger.error(f"手术申请{app['id']}的arranged_start_time格式错误，错误信息为{e}")
+                        app['arranged_start_time'] = datetime.max
+
             self.room_surgery[k].sort(key=lambda x: (
                 x['arranged_start_time'] if x['arranged_start_time'] is not None else datetime.max,
                 x.get('surgeon_code', ''),
                 (x.get('is_infected', 1) != 0, x.get('is_infected', 1)),
                 x.get('incision_size', float('inf'))
             ))
-            # print(k, self.room_surgery[k])
         # 二阶段排好的结果
         res_2 = []
         for room_id, applications in self.room_surgery.items():
