@@ -417,6 +417,7 @@ class ScheduleIO():
         回写数据库
         :param applications: list[dict], 申请列表
         """
+        self.logger.info("回写数据库")
         for application in applications:
             assert isinstance(application, dict)
             assert application.keys() == {'id',
@@ -449,6 +450,7 @@ class ScheduleIO():
                        application['arranged_end_time'],
                        application['id'])
             execute_sql(sql)
+        self.logger.info("回写数据库完成")
 
     def sync_info_python_to_info(self, drop_ratio=0):
         """
