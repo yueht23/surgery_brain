@@ -151,7 +151,6 @@ class Schedule():
 
         self.sio.write_result_to_db(res)
         self.sio.validation_check()
-        self.logger.info("Schedule first finished")
 
     def schedule_sec(self):
         """
@@ -528,7 +527,6 @@ class Schedule():
 
         self.sio.write_result_to_db(res_2)
         self.sio.validation_check()
-        self.logger.info("第二阶段排班结束")
 
     def gantt_chart(self):
         """
