@@ -513,3 +513,50 @@ class ScheduleIO():
         """.format(self.schedule_date)
         execute_sql(sql)
         self.logger.info("surgicalapplication_info_port表中的scheduling_state字段重置完成")
+
+    def validation_check(self):
+        """
+        用于检测手术排程的合法性
+        :return:
+        """
+        try:
+            self.logger.info("开始进行排程结果的合法性检查")
+            sql = "select * from surgicalapplicationinfo_python"
+            applications = query_all_dict(sql)
+            df_applications = pd.DataFrame(applications)
+
+            df_applications["arranged_start_time"] = pd.to_datetime(df_applications["arranged_start_time"])
+            df_applications["arranged_end_time"] = pd.to_datetime(df_applications["arranged_end_time"])
+
+            df_arranged = df_applications.loc[df_applications["arranged_status"] > 0]
+
+            if not (df_arranged["arranged_end_time"].dt.hour <= 20).all():
+                invalid_id_set = df_arranged.loc[df_arranged["arranged_end_time"].dt.hour > 20]["id"].tolist()
+                self.logger.error("排程结果有误，最晚结束时间晚于20:00, id:{}".format(invalid_id_set))
+            if not (df_arranged["arranged_start_time"].dt.hour >= 8).all():
+                invalid_id_set = df_arranged.loc[df_arranged["arranged_start_time"].dt.hour < 8]["id"].tolist()
+                self.logger.error("排程结果有误，最早开始时间早于8:00, id:{}".format(invalid_id_set))
+            if not (df_arranged["arranged_start_time"] < df_arranged["arranged_end_time"]).all():
+                invalid_id_set = \
+                    df_arranged.loc[df_arranged["arranged_start_time"] >= df_arranged["arranged_end_time"]][
+                        "id"].tolist()
+                self.logger.error("排程结果有误，开始时间大于结束时间, id:{}".format(invalid_id_set))
+
+            # 每个手术室（arranged_room_id） 的手术不重叠
+            for room_id in df_arranged["arranged_room_id"].unique():
+                df_room = df_arranged.loc[df_arranged["arranged_room_id"] == room_id]
+                df_room = df_room.sort_values(by="arranged_start_time")
+                if not (df_room["arranged_start_time"].shift(-1) >= df_room["arranged_end_time"])[:-1].all():
+                    self.logger.error(f"手术室 {self.get_room_info_from_id(room_id)} 的手术时间存在重叠")
+
+            # 每个医生（surgeon_code） 的手术不重叠
+            for surgeon_code in df_arranged["surgeon_code"].unique():
+                df_surgeon = df_arranged.loc[df_arranged["surgeon_code"] == surgeon_code]
+                df_surgeon = df_surgeon.sort_values(by="arranged_start_time")
+                if not (df_surgeon["arranged_start_time"].shift(-1) >= df_surgeon["arranged_end_time"])[:-1].all():
+                    self.logger.error(f"医生 {surgeon_code} 的手术时间存在重叠")
+
+            self.logger.info("排程结果的合法性检查完成")
+
+        except Exception as e:
+            self.logger.error("排程结果的合法性检查出错，请检查排程结果")
