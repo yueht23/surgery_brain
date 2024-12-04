@@ -149,9 +149,8 @@ class Schedule():
                 clock += timedelta(hours=(application["duration"] + self.TURNOVER_INTERVAL))
         self.logger.info(f"排好结果汇总完成，申请数为{len(waiting_list)}，一阶段完成数为{len(res)}")
 
-        self.logger.info("回写数据库")
         self.sio.write_result_to_db(res)
-        self.logger.info("数据库回写成功")
+        self.sio.validation_check()
         self.logger.info("Schedule first finished")
 
     def schedule_sec(self):
@@ -526,10 +525,10 @@ class Schedule():
                 })
                 clock += timedelta(hours=(application["duration"] + self.TURNOVER_INTERVAL))
         self.logger.info(f"排好结果汇总完成，申请数为{len(total_applications)}，二阶段总完成数为{len(res_2)}")
-        self.logger.info("二阶段排好结果汇总")
 
-        self.logger.info("回写数据库")
         self.sio.write_result_to_db(res_2)
+        self.sio.validation_check()
+        self.logger.info("第二阶段排班结束")
 
     def gantt_chart(self):
         """
