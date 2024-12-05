@@ -150,7 +150,8 @@ class ScheduleIO():
                 '心内科306',
                 '男科',
                 '运动医学科',
-                '肝脾外科' 
+                '肝脾外科',
+                '肝胆脾外科' 
               ) 
             ORDER BY
               sip.ELECTR_REQUISITION_NO;
