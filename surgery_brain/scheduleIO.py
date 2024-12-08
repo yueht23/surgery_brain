@@ -281,7 +281,13 @@ class ScheduleIO():
 
         df = pd.DataFrame(extended, columns=['dept', 'seq_alphabet', 'room_id', 'weight'])
         df = df.astype({'dept': str, 'seq_alphabet': str, 'room_id': int, 'weight': int})
-        self.logger.info("当前星期{},当前星期的手术室分配为:\n{}".format(self.get_weekday(), df))
+        # 为了更好的日志输出
+        df_print = df.copy()
+        df_print["operating_department"] = df["room_id"].apply(lambda x: self.get_room_info_from_id(x)[0])
+        df_print["real_name"] = df["room_id"].apply(lambda x: self.get_room_info_from_id(x)[1])
+        df_print = df_print[["operating_department", "real_name", "dept", "seq_alphabet", "room_id", "weight"]]
+        df_print = df_print.sort_values(by=["operating_department", "real_name"])
+        self.logger.info("当前星期{},当前星期的手术室分配为:\n{}".format(self.get_weekday(), df_print))
         return df
 
     def get_room_id_and_weight(self, dept, seq_alphabet):
