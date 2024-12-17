@@ -47,7 +47,7 @@ class Schedule():
 
     def __get_room_workload(self, room_id):
         """
-        Get the room workload of the current day.
+        获取当前天房间工作量的功能，注意：换台间隔被考虑进入
         :return:
         """
         total_duration = 0.0
@@ -57,10 +57,16 @@ class Schedule():
 
     def __check_room_overwork(self, room_id):
         """
-        Get the room workload of the current day, noted the last application must end before 8:00 + 13:00 = 21:00
+        最后一台手术在MAX_ROOM_WORKLOAD（e.g. 12 hour, i.e. 8+12=20点）之前开台就不超时
         :return:
         """
-        return self.__get_room_workload(room_id) - self.TURNOVER_INTERVAL > self.MAX_ROOM_WORKLOAD
+        # 没有一台手术，直接返回False
+        if len(self.rooms[room_id]) == 0:
+            return False
+        else:
+            last_app_dur = self.rooms[room_id][-1]['duration']
+            last_app_start_time = self.__get_room_workload(room_id) - self.TURNOVER_INTERVAL - last_app_dur
+            return last_app_start_time >= self.MAX_ROOM_WORKLOAD
 
     def schedule_first(self):
         """
