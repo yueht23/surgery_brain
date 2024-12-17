@@ -50,12 +50,12 @@ class ScheduleIO():
             sip.SURGERY_TABLE_NO AS 't_seq',-- 台序
             REPLACE ( sip.SURGERY_DURATION, '-小时', '' ) AS 'duration',-- 预估手术时长
             (
-              sip.INFECTIOUS_NONE = '1' 
-              OR sip.INFECTIOUS_HIV = '1' 
-              OR sip.INFECTIOUS_HBV = '1' 
-              OR sip.INFECTIOUS_HCV = '1' 
+              -- sip.INFECTIOUS_NONE = '1' 
+              sip.INFECTIOUS_HIV = '1' 
+              -- OR sip.INFECTIOUS_HBV = '1' 
+              -- OR sip.INFECTIOUS_HCV = '1' 
               OR sip.INFECTIOUS_AIR = '1' 
-              OR sip.INFECTIOUS_OTHER = '1' 
+              -- OR sip.INFECTIOUS_OTHER = '1' 
             ) AS 'is_infected',-- 是否感染
             ( sip.oper_typename <> '手术' ) AS 'is_operation',-- 操作非手术
             CASE
