@@ -19,8 +19,8 @@ def get_first_schedule(request):
         my_schedule.schedule_first()
 
         logger.info("first schedule is done")
-        return HttpResponse(json.dumps(result))
-    return HttpResponse("请求错误")
+        return HttpResponse(json.dumps(result), status=200)
+    return HttpResponse("请求错误", status=400)
 
 
 def get_sec_schedule(request):
@@ -37,8 +37,8 @@ def get_sec_schedule(request):
 
         my_schedule.schedule_sec()
         logger.info("sec schedule is done")
-        return HttpResponse(json.dumps(result))
-    return HttpResponse("请求错误")
+        return HttpResponse(json.dumps(result), status=200)
+    return HttpResponse("请求错误", status=400)
 
 
 def reset_info_port(request):
