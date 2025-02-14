@@ -4,41 +4,39 @@ import json
 from .schedule2 import Schedule
 
 from common.logger import Logger
+import traceback
 
 
 def get_first_schedule(request):
     logger = Logger(__name__).get_logger()
-    if request.method == 'POST':
-        result = []
+    try:
         query_condition = json.loads(request.body)
         case_date = query_condition['date']
-
         logger.info("first schedule and  case_date: " + case_date)
         my_schedule = Schedule(schedule_date=case_date)
-
         my_schedule.schedule_first()
-
         logger.info("first schedule is done")
-        return HttpResponse(json.dumps(result), status=200)
-    return HttpResponse("请求错误", status=400)
+        return HttpResponse(json.dumps("手术日排程成功", ensure_ascii=False), status=200)
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.error(tb)
+        return HttpResponse(json.dumps("手术日排程失败,原因如下：" + str(e), ensure_ascii=False), status=400)
 
 
 def get_sec_schedule(request):
     logger = Logger(__name__).get_logger()
-    if request.method == 'POST':
-        result = []
+    try:
         query_condition = json.loads(request.body)
         case_date = query_condition['date']
-
         logger.info("sec schedule and  case_date: " + case_date)
-
-        logger.info("init schedule object")
         my_schedule = Schedule(schedule_date=case_date)
-
         my_schedule.schedule_sec()
         logger.info("sec schedule is done")
-        return HttpResponse(json.dumps(result), status=200)
-    return HttpResponse("请求错误", status=400)
+        return HttpResponse(json.dumps("抢单排程成功", ensure_ascii=False), status=200)
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.error(tb)
+        return HttpResponse(json.dumps("抢单排程失败,原因如下：" + str(e), ensure_ascii=False), status=400)
 
 
 def reset_info_port(request):
