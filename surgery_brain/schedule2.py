@@ -172,7 +172,7 @@ class Schedule():
         self.logger.info("未排程的申请长度为{}".format(len(unarranged_applications)))
         self.logger.info("总的申请长度为{}".format(len(total_applications)))
 
-        # 待排手术权重重新赋值
+        # 待排手术权重重新赋值 TODO: 需要考虑为空的情况
         day_surgery = [app for app in unarranged_applications if app['is_day_surgery']]
         elective_surgery = [app for app in unarranged_applications if not app['is_day_surgery']]
         # df_unarranged_applications = pd.DataFrame(unarranged_applications)
