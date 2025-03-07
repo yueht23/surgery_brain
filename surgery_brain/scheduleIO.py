@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 import pandas as pd
 from datetime import datetime
+
+from matplotlib.style import available
+
 from common.sql_util import query_all_dict, execute_sql, get_sqlalchemy_engine
 from common.logger import Logger
 import re
@@ -395,6 +398,7 @@ class ScheduleIO():
 
         # 如果没有特殊手术，sp_name为None
         if sp_name is None:
+            self.logger.info("当前手术不是特殊手术，采用科室的约束表")
             sql = """
             SELECT
               ao.family_name AS apply_dept, -- 申请科室名称
@@ -406,8 +410,9 @@ class ScheduleIO():
             WHERE
               ic.whether_can_operation = 1 AND ao.family_name = '{}'
             """.format(apply_dept)
-            return [row['room_id'] for row in query_all_dict(sql)]
+            available_rooms = [row['room_id'] for row in query_all_dict(sql)]
         else:
+            self.logger.info(f"当前手术是特殊手术{sp_name}，采用特殊手术的约束表")
             sql = """
             SELECT
               ssr.operating_room_id
@@ -417,7 +422,9 @@ class ScheduleIO():
             WHERE
               ssr.whether_can_operation AND mapping_name = '{}'
             """.format(sp_name)
-            return [row['operating_room_id'] for row in query_all_dict(sql)]
+            available_rooms = [row['operating_room_id'] for row in query_all_dict(sql)]
+
+        return available_rooms
 
     def write_result_to_db(self, applications):
         """
