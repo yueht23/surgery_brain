@@ -364,8 +364,13 @@ class Schedule():
         # 添加【约束】：手术间条件约束
         unavailable_rooms = {}  # 不可进行手术的术间
         for application in total_applications:
+            self.logger.info("当前待排申请{}".format(application))
             unavailable_rooms[application['id']] = list(set(set_k) - set(self.sio.get_available_rooms(application)))
-            # self.logger.info("手术编号", application['id'], "可行术间", self.sio.get_available_rooms(application), "是否在第一阶段固定", whether_arranged_s1[j])
+            self.logger.info("是否在第一阶段固定:" + str(whether_arranged_s1[application['id']]))
+            self.logger.info("可行术间：")
+            for _ in list(set(set_k) - set(unavailable_rooms[application['id']])):
+                self.logger.info(str(self.sio.get_room_info_from_id(_)))
+
             para_ij[application['surgeon_code']][application['id']] = 1
             para_mj[application['apply_dept']][application['id']] = 1
 
