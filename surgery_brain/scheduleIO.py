@@ -29,9 +29,38 @@ class ScheduleIO():
         surgicalapplicationinfo_python表中，方便后续排程
         :return:
         """
+
+        def get_apply_depts_whitelist():
+            """
+            获取申请科室白名单
+            :return:list[str]
+            """
+            whitelist = []
+            sql = """
+            SELECT DISTINCT department_name FROM department_whitelist WHERE is_active = 1
+            """
+            whitelist = query_all_dict(sql)
+            whitelist = [item['department_name'] for item in whitelist]
+            self.logger.info("所要纳入排程的申请科室白名单为：" + ",".join(whitelist))
+            return whitelist
+
+        def get_room_depts_whitelist():
+            """
+            获取手术部白名单
+            :return:list[str]
+            """
+            whitelist = []
+            sql = """
+            SELECT DISTINCT operation_room_name FROM operation_room_whitelist WHERE is_active = 1
+            """
+            whitelist = query_all_dict(sql)
+            whitelist = [item['operation_room_name'] for item in whitelist]
+            self.logger.info("所要纳入排程的手术部白名单为：" + ",".join(whitelist))
+            return whitelist
+
         execute_sql("DROP TABLE IF EXISTS surgicalapplicationinfo_python")
 
-        sql = """
+        sql = f"""
             SELECT DISTINCT-- 去重
             -- --------------------------------
             -- --------------------------------
@@ -119,44 +148,13 @@ class ScheduleIO():
               INNER JOIN doctor_info di ON di.doctor = sip.SURGERY_DR_NAME
               LEFT JOIN surgicalapplicationinfo si ON sip.ELECTR_REQUISITION_NO = si.application_number  -- 已经排好的手术 
             WHERE
-              sip.SURGERY_DATE LIKE '{}%' 
+              sip.SURGERY_DATE LIKE '{self.schedule_date}%' 
               -- AND ( sip.scheduling_state = FALSE OR sip.scheduling_state IS NULL ) 
-              AND sip.SURGERY_DEPT_NAME IN ( '第一手术部', '第二手术部', '日间手术室' ) 
-              AND sip.APPLY_DEPT_NAME IN (
-                '产科',
-                '妇科',
-                '耳鼻咽喉头颈外科',
-                '骨科关节',
-                '骨科脊柱',
-                '泌尿外科',
-                '胆胰外科',
-                '普外甲乳外科',
-                '胃肠中心109',
-                '胃肠中心209',
-                '胃肠中心309',
-                '胸外科',
-                '普外疝儿外科',
-                '肾脏内科',
-                '口腔科',
-                '创伤中心2',
-                '骨科创伤',
-                '骨科手足',
-                '普外血管外科',
-                '神经外科504',
-                '神经外科505',
-                '神经外科506',
-                '心脏大血管病中心',
-                '心内科206',
-                '心内科306',
-                '男科',
-                '运动医学科',
-                '肝脾外科',
-                '肝胆脾外科' 
-              ) 
+              AND sip.SURGERY_DEPT_NAME IN ( {",".join(f"'{item}'" for item in get_room_depts_whitelist())} ) 
+              AND sip.APPLY_DEPT_NAME IN ({",".join(f"'{item}'" for item in get_apply_depts_whitelist())}) 
             ORDER BY
               sip.ELECTR_REQUISITION_NO;
-                    """.format(self.schedule_date)
-
+                    """
         self.logger.info("从surgicalapplicationinfo_port表中导入手术数据到surgicalapplicationinfo_python表中...")
         surgery_table = pd.DataFrame(query_all_dict(sql))
 
@@ -287,7 +285,9 @@ class ScheduleIO():
         df_print["real_name"] = df["room_id"].apply(lambda x: self.get_room_info_from_id(x)[1])
         df_print = df_print[["operating_department", "real_name", "dept", "seq_alphabet", "room_id", "weight"]]
         df_print = df_print.sort_values(by=["operating_department", "real_name"])
-        self.logger.info("当前星期{},当前星期的手术室分配为:\n{}".format(self.get_weekday(), df_print))
+        self.logger.info("当前星期{},当前星期的手术室分配为:\n".format(self.get_weekday()))
+        for row in str(df_print).split("\n"):
+            self.logger.info(row)
         return df
 
     def get_room_id_and_weight(self, dept, seq_alphabet):
