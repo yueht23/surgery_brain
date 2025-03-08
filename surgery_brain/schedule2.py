@@ -505,16 +505,20 @@ class Schedule():
         # 排序
         for k in set_k:
             for app in self.room_surgery[k]:
-                if not isinstance(app['arranged_start_time'], datetime):
-                    try:
-                        app['arranged_start_time'] = datetime.strptime(app['arranged_start_time'], "%Y-%m-%d %H:%M:%S")
-                    except Exception as e:
-                        # TODO: 需要排查，时间无法转换为datetime的原因
-                        self.logger.error(f"手术申请{app['id']}的arranged_start_time格式错误，错误信息为{e}")
-                        app['arranged_start_time'] = datetime.max
+
+                if app["arranged_status"] == 1:
+                    assert isinstance(app['arranged_start_time'], datetime), "手术{}的开始时间非法".format(app)
+                    assert isinstance(app['arranged_end_time'], datetime), "手术{}的结束时间非法".format(app)
+
+                elif app["arranged_status"] == 2:
+                    app['arranged_start_time'] = datetime.max
+                    if k in unavailable_rooms[app['id']]:
+                        self.logger.error("{}在排班中不可排到该手术室集{}".format(app, unavailable_rooms[app['id']]))
+                else:
+                    raise ValueError("手术{}未知的排班状态".format(app))
 
             self.room_surgery[k].sort(key=lambda x: (
-                x['arranged_start_time'] if x['arranged_start_time'] is not None else datetime.max,
+                x['arranged_start_time'],
                 x.get('surgeon_code', ''),
                 (x.get('is_infected', 1) != 0, x.get('is_infected', 1)),
                 x.get('incision_size', float('inf'))
@@ -549,7 +553,6 @@ class Schedule():
         self.logger.info(f"排好结果汇总完成，申请数为{len(total_applications)}")
         self.logger.info(f"第一阶段完成数{len(stage_1st_finished)}")
         self.logger.info(f"第二阶段完成数{len(stage_2st_finished)}")
-
 
         self.sio.write_result_to_db(res_2)
         self.sio.validation_check()
