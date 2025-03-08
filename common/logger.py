@@ -17,7 +17,8 @@ class Logger:
             file_handler = RotatingFileHandler(log_file, maxBytes=1024 * 1024 * 5, backupCount=3)
             file_handler.setLevel(level)
 
-            formatter = logging.Formatter('%(asctime)s - %(name)s - (%(filename)s:%(lineno)d) - %(message)s')
+            formatter = logging.Formatter(
+                '%(asctime)s - %(name)s - (%(filename)s:%(lineno)d) - %(levelname)s - %(message)s')
             console_handler.setFormatter(formatter)
             file_handler.setFormatter(formatter)
 
