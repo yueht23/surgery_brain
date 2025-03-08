@@ -521,6 +521,10 @@ class Schedule():
             ))
         # 二阶段排好的结果
         res_2 = []
+
+        stage_1st_finished = []
+        stage_2st_finished = []
+
         for room_id, applications in self.room_surgery.items():
             # 每个手术室从8:00开始,转换为datetime.time
             clock = datetime.strptime(self.schedule_date + " 08:00:00", "%Y-%m-%d %H:%M:%S")
@@ -534,7 +538,18 @@ class Schedule():
                     "arranged_end_time": clock + timedelta(hours=application["duration"]),
                 })
                 clock += timedelta(hours=(application["duration"] + self.TURNOVER_INTERVAL))
-        self.logger.info(f"排好结果汇总完成，申请数为{len(total_applications)}，二阶段总完成数为{len(res_2)}")
+
+                if application["arranged_status"] == 1:
+                    stage_1st_finished.append(application)
+                elif application["arranged_status"] == 2:
+                    stage_2st_finished.append(application)
+                else:
+                    raise ValueError("手术排程状态（arranged_status）异常，异常申请为{}".format(application))
+
+        self.logger.info(f"排好结果汇总完成，申请数为{len(total_applications)}")
+        self.logger.info(f"第一阶段完成数{len(stage_1st_finished)}")
+        self.logger.info(f"第二阶段完成数{len(stage_2st_finished)}")
+
 
         self.sio.write_result_to_db(res_2)
         self.sio.validation_check()
