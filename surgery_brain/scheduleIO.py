@@ -1,12 +1,10 @@
 # -*- coding: utf-8 -*-
 import pandas as pd
 from datetime import datetime
-
-from matplotlib.style import available
-
 from common.sql_util import query_all_dict, execute_sql, get_sqlalchemy_engine
 from common.logger import Logger
 import re
+from math import ceil
 
 
 class ScheduleIO():
@@ -338,7 +336,14 @@ class ScheduleIO():
 
         applications = query_all_dict(sql)
         for application in applications:
-            application['duration'] = max(round(float(application['duration'])), 0.5)
+
+            modified_duration = max(ceil(float(application['duration']) * 2) / 2, 0.5)
+            if abs(float(application['duration']) - modified_duration) > 0.1:
+                self.logger.warning("手术{}的时长{}被修改为{}".format(application['id'],
+                                                                      application['duration'],
+                                                                      modified_duration))
+
+            application['duration'] = modified_duration
             application['seq_alphabet'] = application['t_seq'][0]
             application['seq_number'] = int(application['t_seq'][1:])
 
