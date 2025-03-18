@@ -144,7 +144,8 @@ class ScheduleIO():
               si.operation_start_time AS 'arranged_start_time',-- 安排手术开始时间
               si.operation_end_time AS 'arranged_end_time', -- 安排手术结束时间
               -- TODO: 失败次数这个先不管
-              0 AS 'attempt_times' -- 排程尝试次数
+              0 AS 'attempt_times', -- 排程尝试次数
+              '' AS unarranged_reason-- 未排程原因
               
             FROM
               surgicalapplication_info_port sip
@@ -465,6 +466,39 @@ class ScheduleIO():
                        application['id'])
             execute_sql(sql)
         self.logger.info("回写数据库完成")
+
+    def update_unscheduled_reason(self, id, reason, append=False):
+        """
+        更新未排程手术的原因
+        :param id: 手术申请单号
+        :param reason: 未排程原因
+        :param append: 是否追加原因
+        :return: None
+        """
+        try:
+            if append:
+                sql = f"""
+                    update surgicalapplicationinfo_python
+                    set 
+                        unarranged_reason = concat(unscheduled_reason, ';{reason}')
+                    where
+                        id = '{id}'
+                """
+            else:
+                sql = f"""
+                    update surgicalapplicationinfo_python
+                    set 
+                        unarranged_reason = '{reason}'
+                    where
+                        id = '{id}'
+                """
+            execute_sql(sql)
+            _ = "追加" if append else "更新"
+            self.logger.info(f"{_} 手术 {id} 的未排程原因为: {reason}")
+
+
+        except Exception as e:
+            self.logger.error(f"更新手术 {id} 的未排程原因失败: {e}")
 
     def sync_info_python_to_info(self, drop_ratio=0):
         """

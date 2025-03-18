@@ -89,18 +89,21 @@ class Schedule():
 
             if application['is_infected']:
                 self.logger.info("当前申请为感染性疾病，不参与一轮排程")
+                self.sio.update_unscheduled_reason(application['id'], "该手术为感染性疾病，无法一轮排程")
                 continue
 
             if self.__check_doctor_overwork(application['surgeon_code']):
-                self.logger.info("医生{}已经超过工作量".format(application['surgeon_code']))
-                self.logger.info("跳过当前申请")
+                self.logger.info("医生{}已经超过工作量,跳过当前申请".format(application['surgeon_code']))
+                self.sio.update_unscheduled_reason(application['id'], "该手术术者工作量已经超上限，无法一轮排程")
                 continue
 
             room_id, init_weight = self.sio.get_room_id_and_weight(application['apply_dept'],
                                                                    application['seq_alphabet'])
             if not room_id:
-                self.logger.info("当前申请没有对应的手术室")
-                self.logger.info("跳过当前申请")
+                self.logger.info("当前申请没有对应的手术室,跳过当前申请")
+                self.sio.update_unscheduled_reason(application['id'], f"{application['apply_dept']}" +
+                                                   f"{application['seq_alphabet']}" +
+                                                   f"在{self.schedule_date}没有对应的手术日,无法一轮排程")
                 continue
 
             weight = init_weight + 100 * (ord(application['seq_alphabet']) - ord('A')) + application['seq_number']
@@ -132,6 +135,12 @@ class Schedule():
                 self.logger.info("删除最后一个申请")
                 dropped_application = self.rooms[room_id].pop()
                 self.logger.info("删除的申请为{}".format(dropped_application))
+                self.sio.update_unscheduled_reason(dropped_application['id'],
+                                                   f"{application['apply_dept']}{application['seq_alphabet']}" +
+                                                   f"在{self.schedule_date}对应的手术间" +
+                                                   f"{self.sio.get_room_info_from_id(room_id)[0]}" +
+                                                   f"{self.sio.get_room_info_from_id(room_id)[1]}" +
+                                                   "已满,且该手术权重较小，无法一轮排程")
                 self.logger.info("更新医生工作量")
                 self.doctor_workload[dropped_application['surgeon_code']] -= dropped_application['duration']
                 self.logger.info("当前医生{}的工作量为{}".format(dropped_application['surgeon_code'],
@@ -549,6 +558,14 @@ class Schedule():
                     stage_2st_finished.append(application)
                 else:
                     raise ValueError("手术排程状态（arranged_status）异常，异常申请为{}".format(application))
+
+        # 填写未排程的申请的原因
+        stage_1st_finished_ids = [_["id"] for _ in stage_1st_finished]
+        stage_2st_finished_ids = [_["id"] for _ in stage_2st_finished]
+        for app in total_applications:
+            if app["id"] not in stage_1st_finished_ids and app["id"] not in stage_2st_finished_ids:
+                self.logger.warning("申请{}未被排程".format(app))
+                self.sio.update_unscheduled_reason(app['id'], " 该手术二阶段抢单排程未成功（可能原因多样）")
 
         self.logger.info(f"排好结果汇总完成，申请数为{len(total_applications)}")
         self.logger.info(f"第一阶段完成数{len(stage_1st_finished)}")
