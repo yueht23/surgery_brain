@@ -108,7 +108,6 @@ def execute_sql(sql, params=None):
     :param params:
     :return:
     '''
-    assert "select" not in sql.lower(), "This function is for executing non-select sql"
     with connection.cursor() as cursor:
         if params:
             cursor.execute(sql, params=params)
