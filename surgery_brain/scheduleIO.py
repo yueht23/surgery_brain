@@ -17,8 +17,6 @@ class ScheduleIO():
         self.logger.info("ScheduleIO initializing...")
 
         self.schedule_date = schedule_date
-        assert (datetime.strptime(schedule_date, "%Y-%m-%d") >= datetime.
-                strptime("2024-09-06", "%Y-%m-%d")), "排程日期必须在2024-09-06之后"
         self.__total_rooms_info = None
         self.__dept_seq_to_room_id = self.__get_dept_seq_to_room_id_df()
         self.sqlalchemy_engine = get_sqlalchemy_engine()
@@ -30,6 +28,45 @@ class ScheduleIO():
         surgicalapplicationinfo_python表中，方便后续排程
         :return:
         """
+
+        def snapshot_surgeries():
+            """
+            将surgicalapplication_info_port中日期为schedule_date的手术数据快照到
+            surgicalapplication_info_port_snapshot_YYYYMMDDHHMMSS表中
+            同时删除最旧的快照表
+            :return:
+            """
+            try:
+                snapshot_name = 'surgicalapplication_info_snapshot_' + datetime.now().strftime("%Y%m%d%H%M%S")
+                sql = f"""
+                    CREATE TABLE IF NOT EXISTS {snapshot_name}
+                    AS
+                    SELECT * FROM surgicalapplication_info_port
+                    WHERE surgicalapplication_info_port.SURGERY_DATE LIKE '{self.schedule_date}%'
+                """
+                execute_sql(sql)
+                self.logger.info(f"info_port表快照成功，快照表名为: {snapshot_name}")
+
+                sql = """
+                    SELECT TABLE_NAME
+                    FROM information_schema.TABLES
+                    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME LIKE 'surgicalapplication_info_snapshot_%'
+                """
+
+                tables = query_all_dict(sql)
+                tables = [table['TABLE_NAME'] for table in tables]
+                self.logger.info("info_port表快照共计{}张".format(len(tables)))
+                tables.sort(key=lambda x: datetime.strptime(x.split("_")[-1], "%Y%m%d%H%M%S"))
+                while len(tables) > 5:
+                    sql = f"""
+                        DROP TABLE IF EXISTS {tables[0]}
+                    """
+                    execute_sql(sql)
+                    self.logger.info("删除最旧的快照表成功，快照表名为: {}".format(tables[0]))
+                    tables.pop(0)
+
+            except Exception as e:
+                self.logger.error("info_port表快照失败: {}".format(e))
 
         def get_apply_depts_whitelist():
             """
@@ -60,6 +97,8 @@ class ScheduleIO():
             return whitelist
 
         execute_sql("DROP TABLE IF EXISTS surgicalapplicationinfo_python")
+        snapshot_surgeries()
+
 
         sql = f"""
             SELECT DISTINCT-- 去重
