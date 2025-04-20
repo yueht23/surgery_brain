@@ -198,42 +198,46 @@ class Schedule():
             self.logger.info("")
             self.logger.info("当前待排申请{}".format(application))
 
-            weight2 = 0.0
+            # 用于记录各项权重的构成
+            # key:子项权重->val:该子项权重的权重
+            weight2 = dict()
 
             # 特殊手术
-            weight2 += 10 if application["is_sp_robot"] else 0
-            weight2 += 10 if application["is_sp_intervention"] else 0
-            weight2 += 10 if application["is_sp_perspective"] else 0
-            weight2 += 10 if application["is_sp_holmium"] else 0
+
+            weight2["is_sp_robot"] = 10 if application["is_sp_robot"] else 0
+            weight2["is_sp_intervention"] = 10 if application["is_sp_intervention"] else 0
+            weight2["is_sp_perspective"] = 10 if application["is_sp_perspective"] else 0
+            weight2["is_sp_holmium"] = 10 if application["is_sp_holmium"] else 0
 
             # weight2 +=   # 先申请先使用,暂不考虑申请提交时间
 
             # 抢单失败次数
-            weight2 += 2 * application["attempt_times"]
+            weight2["attempt_times"] = 2 * application["attempt_times"]
 
             # 日间手术
             if application["is_day_surgery"]:
-                weight2 += 3
+                weight2["is_day_surgery"] = 3
                 for _, row_day_app in df_day_surgery.iterrows():
                     if row_day_app["id"] == application["id"]:
-                        weight2 += row_day_app['day_percentage']
+                        weight2['day_percentage'] = row_day_app['day_percentage']
             # 择期手术
             else:
                 for _, row_elective_app in df_elective_surgery.iterrows():
                     if row_elective_app["id"] == application["id"]:
-                        weight2 += row_elective_app['elective_percentage']
+                        weight2['elective_percentage'] = row_elective_app['elective_percentage']
 
             # 国考四级手术
-            weight2 += 3 if application["surgery_level"] == "4" else 0
+            weight2["surgery_level"] = 3 if application["surgery_level"] == "4" else 0
 
             # 手术优先操作
-            weight2 += 3 if not application["is_operation"] else 0
+            weight2["is_operation"] = 3 if not application["is_operation"] else 0
 
             # 微创优先非微创
-            weight2 += 3 if application["is_mini_invasive"] else 0
+            weight2["is_mini_invasive"] = 3 if application["is_mini_invasive"] else 0
 
-            application["weight2"] = weight2
-            self.logger.info("当前申请的权重为{}".format(weight2))
+            application["weight2"] = sum(weight2.values())
+            self.logger.info("当前申请的总权重为{}".format(application["weight2"]))
+            self.logger.info("当前申请的权重的构成为{}".format(weight2))
         self.logger.info("二阶段权重构造完成")
         """
          变量/参数：
