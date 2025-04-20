@@ -182,7 +182,7 @@ class ScheduleIO():
               si.operation_end_time AS 'arranged_end_time', -- 安排手术结束时间
               -- TODO: 失败次数这个先不管
               0 AS 'attempt_times', -- 排程尝试次数
-              '' AS unarranged_reason-- 未排程原因
+              '' AS unarranged_reason-- 未排程原因 TODO:需要从info中抓取
               
             FROM
               surgicalapplication_info_port sip
@@ -523,8 +523,8 @@ class ScheduleIO():
             if append:
                 sql = f"""
                     update surgicalapplicationinfo_python
-                    set 
-                        unarranged_reason = concat(unscheduled_reason, ';{reason}')
+                    set
+                        unarranged_reason = concat(unarranged_reason, ';{reason}')
                     where
                         id = '{id}'
                 """
