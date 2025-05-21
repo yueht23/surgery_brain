@@ -188,10 +188,10 @@ class Schedule():
         df_day_surgery = pd.DataFrame(day_surgery)
         df_elective_surgery = pd.DataFrame(elective_surgery)
         df_day_surgery["day_percentage"] = df_day_surgery['inpatient_serial'].rank(method='average',
-                                                                                   ascending=False) / len(
+                                                                                   ascending=True) / len(
             df_day_surgery)
         df_elective_surgery["elective_percentage"] = df_elective_surgery['inpatient_serial'].rank(
-            method='average') / len(df_elective_surgery)
+            method='average', ascending=True) / len(df_elective_surgery)
 
         self.logger.info("二阶段权重构造")
         for application in total_applications:
