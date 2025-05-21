@@ -33,6 +33,7 @@ build/
 ### VS Code ###
 .vscode/
 
+feedback/
 
 ### python pyc files ###
 *.pyc
@@ -53,3 +54,5 @@ logs/
 
 
 *.pyc
+
+Dockerfile
