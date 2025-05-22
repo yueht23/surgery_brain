@@ -204,10 +204,12 @@ class ScheduleIO():
             self.logger.info("已排手术{}条".format(surgery_table.loc[surgery_table["arranged_status"] > 0].shape[0]))
             self.logger.info("未排手术{}条".format(surgery_table.loc[surgery_table["arranged_status"] == 0].shape[0]))
             # 完成数据类型转换
-            surgery_table.to_sql('surgicalapplicationinfo_python',
+            _ = surgery_table.to_sql('surgicalapplicationinfo_python',
                                  self.sqlalchemy_engine,
                                  if_exists='replace',
                                  index=False)
+            if _ != len(surgery_table):
+                raise ValueError("存在{}条数据导入失败，请检查数据库".format(len(surgery_table) - _))
             self.logger.info("手术数据导入完成")
         else:
             raise ValueError("没有需要导入的手术，无需排程，检查日期是否正确，当日是否有手术申请")
