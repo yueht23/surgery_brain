@@ -76,3 +76,37 @@ def execute_sql(sql, params=None):
             cursor.execute(sql)
         connection.commit()
         return cursor.rowcount
+
+
+def execute_sql_file(file_path):
+    '''
+    从文件执行SQL语句
+    :param file_path: SQL文件路径（支持相对路径和绝对路径）
+    :return: 执行结果
+    '''
+    try:
+        # 获取调用者的文件路径
+        import inspect
+        import os
+        caller_frame = inspect.currentframe().f_back
+        caller_file = caller_frame.f_code.co_filename
+        caller_dir = os.path.dirname(os.path.abspath(caller_file))
+
+        # 如果是相对路径，转换为绝对路径
+        if not os.path.isabs(file_path):
+            file_path = os.path.join(caller_dir, file_path)
+
+        with open(file_path, 'r', encoding='utf-8') as f:
+            sql_content = f.read()
+
+        # 按分号分割SQL语句
+        sql_statements = sql_content.split(';')
+
+        # 执行每条SQL语句
+        for sql in sql_statements:
+            sql = sql.strip()
+            if sql:  # 跳过空语句
+                execute_sql(sql)
+        return True
+    except Exception as e:
+        raise e
