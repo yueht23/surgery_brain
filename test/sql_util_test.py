@@ -6,10 +6,13 @@ from waitress import serve
 from sqlalchemy import text
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from c2matica_py_server.wsgi import application
 from common.logger import Logger
-from common.sql_util import get_sqlalchemy_engine, execute_sql, query_all_dict
 
+
+import django
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'c2matica_py_server.settings')
+django.setup()
+from common.sql_util import get_sqlalchemy_engine, execute_sql, query_all_dict
 
 
 
