@@ -601,20 +601,41 @@ class Schedule():
             self.logger.info("已排程的申请获取成功")
             self.logger.info("已排程的申请长度为{}".format(len(arranged_applications)))
 
+
+            # 添加dummy行，用于显示所有的手术间
+            for key, value in self.sio.get_total_room_info().items():
+                arranged_room_id = key
+                arranged_room_dept, arranged_room_name = value
+                tmp = {
+                    # 添加dummy行，用于显示所有的手术间,该dummy只有1s，所以不会影响甘特图的显示
+                    "arranged_start_time": datetime.strptime(self.schedule_date + " 23:59:58", "%Y-%m-%d %H:%M:%S"),
+                    "arranged_end_time": datetime.strptime(self.schedule_date + " 23:59:59", "%Y-%m-%d %H:%M:%S"),
+                    "arranged_room_id": arranged_room_id,
+                    "arranged_room_dept":arranged_room_dept,
+                    "arranged_room_name":arranged_room_name,
+                }
+                for k, v in arranged_applications[0].items():
+                    if k not in tmp:
+                        tmp[k] = v
+                arranged_applications.append(tmp)
+
             df = pd.DataFrame(arranged_applications)
             df['arranged_start_time'] = df['arranged_start_time'].apply(lambda x: x.strftime("%Y-%m-%d %H:%M:%S"))
             df['arranged_end_time'] = df['arranged_end_time'].apply(lambda x: x.strftime("%Y-%m-%d %H:%M:%S"))
 
-            df["room"] = df["arranged_room_dept"] + df["arranged_room_name"] + "(" + df["arranged_room_id"] + ")"
+            df["room"] =  df["arranged_room_dept"]  +  df["arranged_room_name"]  + "(" +  df["arranged_room_id"].astype(str)  + ")"
             df = df.sort_values(by="room")
+            df["排程阶段"] = df["arranged_status"].map({1: "手术日排程", 2: "第一次抢单排程", 3: "第二次抢单排程"})
+            cm = {"手术日排程":"green", "第一次抢单排程":"blue", "第二次抢单排程":"orange"}
 
             fig = px.timeline(df,
                               x_start="arranged_start_time",
                               x_end="arranged_end_time",
                               y="room",
                               title="手术日排程甘特图",
-                              hover_data=["id", "apply_dept", "patient_name", "surgeon_name", "duration", "t_seq"],
-                              color="arranged_status")
+                              hover_data=["id", "apply_dept","surgeon_name", "duration", "t_seq","is_infected_air"],
+                              color="排程阶段",
+                              color_discrete_map=cm)
             fig.show()
             self.logger.info("甘特图绘制成功")
 
