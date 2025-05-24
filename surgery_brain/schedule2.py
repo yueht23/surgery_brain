@@ -518,6 +518,9 @@ class Schedule():
         # 排序
         for k in set_k:
             for app in self.room_surgery[k]:
+                assert app["is_infected_hiv"] in [0, 1], "手术{}的感染状态非法".format(app)
+
+
 
                 if app["arranged_status"] == 1:
                     assert isinstance(app['arranged_start_time'], datetime), "手术{}的开始时间非法".format(app)
@@ -533,7 +536,7 @@ class Schedule():
             self.room_surgery[k].sort(key=lambda x: (
                 x['arranged_start_time'],
                 x.get('surgeon_code', ''),
-                (x.get('is_infected', 1) != 0, x.get('is_infected', 1)),
+                x.get('is_infected_hiv', 0),
                 x.get('incision_size', float('inf'))
             ))
         # 二阶段排好的结果

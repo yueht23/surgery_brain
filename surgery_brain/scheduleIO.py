@@ -126,6 +126,8 @@ class ScheduleIO():
               OR sip.INFECTIOUS_AIR = '1' 
               -- OR sip.INFECTIOUS_OTHER = '1' 
             ) AS 'is_infected',-- 是否感染
+            sip.INFECTIOUS_HIV = '1' AS 'is_infected_hiv',
+            sip.INFECTIOUS_AIR = '1' AS 'is_infected_air',
             ( sip.oper_typename <> '手术' ) AS 'is_operation',-- 操作非手术
             CASE
                 
@@ -412,9 +414,13 @@ class ScheduleIO():
 
     def get_available_rooms(self, application):
         """
-        获取当前科室的所有可用手术室, 读取科室与手术室的约束表
+        获取当前申请的所有可用手术室，将可用手术间id以列表返回
+        其主要逻辑如下：
+        1. 该手术是不是空气感染，如果是，则直接放在一部23号
+        2. 该手术是不是四类特殊手术，如果是，则采用特殊手术的约束表
+        3. 该手术不属于以上两者，则直接用科室的约束表
         :param application: dict, 申请
-        :return: list, 可用手术室id列表
+        :return: List[str], 可用手术间id列表
         """
         assert isinstance(application, dict)
         assert 'apply_dept' in application
@@ -422,6 +428,14 @@ class ScheduleIO():
         assert 'is_sp_intervention' in application
         assert 'is_sp_perspective' in application
         assert 'is_sp_holmium' in application
+        assert 'is_infected_air' in application
+
+        if application["is_infected_air"]:
+            # TODO: 一部23号
+            # 当前逻辑是写死的，需要前端可改
+            return ["2619"]
+
+
 
         if (application['is_sp_robot'] + application['is_sp_intervention'] +
                 application['is_sp_perspective'] + application['is_sp_holmium'] > 1):
