@@ -40,3 +40,26 @@ INSERT INTO doctor_info SELECT * FROM zhihuishoshudanao_0417.doctor_info;
 -- mapping_date
 CREATE TABLE mapping_date LIKE zhihuishoshudanao_0417.mapping_date;
 INSERT INTO mapping_date SELECT * FROM zhihuishoshudanao_0417.mapping_date;
+
+
+
+-- 如下的表结构只有后序抢单用得到，一阶段手术日排程不用
+-- administrative_office
+CREATE TABLE administrative_office LIKE zhihuishoshudanao_0417.administrative_office;
+INSERT INTO administrative_office SELECT * FROM zhihuishoshudanao_0417.administrative_office;
+
+
+-- interoperative_constraint
+CREATE TABLE interoperative_constraint LIKE zhihuishoshudanao_0417.interoperative_constraint;
+INSERT INTO interoperative_constraint SELECT * FROM zhihuishoshudanao_0417.interoperative_constraint;
+
+
+-- special_surgical_info
+CREATE TABLE special_surgical_info LIKE zhihuishoshudanao_0417.special_surgical_info;
+INSERT INTO special_surgical_info SELECT * FROM zhihuishoshudanao_0417.special_surgical_info;
+
+
+-- special_surgical_restraint
+CREATE TABLE special_surgical_restraint LIKE zhihuishoshudanao_0417.special_surgical_restraint;
+INSERT INTO special_surgical_restraint SELECT * FROM zhihuishoshudanao_0417.special_surgical_restraint;
+
