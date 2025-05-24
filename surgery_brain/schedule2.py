@@ -181,17 +181,23 @@ class Schedule():
         self.logger.info("未排程的申请长度为{}".format(len(unarranged_applications)))
         self.logger.info("总的申请长度为{}".format(len(total_applications)))
 
-        # 待排手术权重重新赋值 TODO: 需要考虑为空的情况
-        day_surgery = [app for app in unarranged_applications if app['is_day_surgery']]
-        elective_surgery = [app for app in unarranged_applications if not app['is_day_surgery']]
-        # df_unarranged_applications = pd.DataFrame(unarranged_applications)
-        df_day_surgery = pd.DataFrame(day_surgery)
-        df_elective_surgery = pd.DataFrame(elective_surgery)
-        df_day_surgery["day_percentage"] = df_day_surgery['inpatient_serial'].rank(method='average',
-                                                                                   ascending=True) / len(
-            df_day_surgery)
-        df_elective_surgery["elective_percentage"] = df_elective_surgery['inpatient_serial'].rank(
-            method='average', ascending=True) / len(df_elective_surgery)
+        # 用inpatient_serial序列号来表示手术申请的先后顺序
+        # inpatient_serial越大，手术申请越靠后，其权重越小
+        df_day_surgery = pd.DataFrame([app for app in unarranged_applications if app['is_day_surgery'] == 1])
+        df_elective_surgery = pd.DataFrame([app for app in unarranged_applications if not app['is_day_surgery'] ==1])
+        if not df_day_surgery.empty:
+            df_day_surgery["day_percentage"] = df_day_surgery['inpatient_serial'].rank(method='average',ascending=False)
+            df_day_surgery["day_percentage"] = df_day_surgery["day_percentage"] /len(df_day_surgery)
+        if not df_elective_surgery.empty:
+            df_elective_surgery["elective_percentage"] = df_elective_surgery['inpatient_serial'].rank( method='average', ascending=False)
+            df_elective_surgery["elective_percentage"] = df_elective_surgery["elective_percentage"] / len(df_elective_surgery)
+        # 只有对于已经排程的手术，才需要考虑day_percentage和elective_percentage两项权重
+        for app in unarranged_applications:
+            if app['is_day_surgery'] == 1:
+                app["day_percentage"] = df_day_surgery[df_day_surgery["id"] == app["id"]]["day_percentage"].values[0]
+            else:
+                app["elective_percentage"] = df_elective_surgery[df_elective_surgery["id"] == app["id"]]["elective_percentage"].values[0]
+
 
         self.logger.info("二阶段权重构造")
         for application in total_applications:
@@ -217,14 +223,10 @@ class Schedule():
             # 日间手术
             if application["is_day_surgery"]:
                 weight2["is_day_surgery"] = 3
-                for _, row_day_app in df_day_surgery.iterrows():
-                    if row_day_app["id"] == application["id"]:
-                        weight2['day_percentage'] = row_day_app['day_percentage']
+                weight2["day_percentage"] = application.get("day_percentage", 0)
             # 择期手术
             else:
-                for _, row_elective_app in df_elective_surgery.iterrows():
-                    if row_elective_app["id"] == application["id"]:
-                        weight2['elective_percentage'] = row_elective_app['elective_percentage']
+                weight2["elective_percentage"] = application.get("elective_percentage", 0)
 
             # 国考四级手术
             weight2["surgery_level"] = 3 if application["surgery_level"] == "4" else 0
