@@ -167,14 +167,35 @@ class Schedule():
         self.sio.write_result_to_db(res)
         self.sio.validation_check()
 
-    def schedule_sec(self):
+    def schedule_sec(self, ARRANGED_STATUS=2):
         """
-        二期的手术日抢单排程
+        抢单排程
+        :param ARRANGED_STATUS: 抢单排程状态，2表示第一次抢单排程，3表示第二次抢单排程
         :return: None
         """
+        assert ARRANGED_STATUS in [2, 3], "抢单排程状态必须为2(第一次抢单排程)或3(第二次抢单排程)"
+
+        current_date = datetime.now().date()
+        schedule_date = datetime.strptime(self.schedule_date, "%Y-%m-%d").date()
+        days_diff = (schedule_date - current_date).days
+        self.sio.logger.info(f"所排的手术日期为{self.schedule_date}，当前为{current_date}，相差{days_diff}天,ARRANGED_STATUS={ARRANGED_STATUS}")
+
+
         self.sio.import_surgeries()
         arranged_applications = self.sio.get_arranged_applications()
-        unarranged_applications = self.sio.get_unarranged_applications()
+
+        assert max([_["arranged_status"] for _ in arranged_applications]) < ARRANGED_STATUS, "抢单排程状态必须大于已排程的手术状态"
+
+        unarranged_applications = []
+        if ARRANGED_STATUS == 2:
+            unarranged_applications = self.sio.get_unarranged_applications()
+        elif ARRANGED_STATUS == 3:
+            for app in self.sio.get_unarranged_applications():
+                if app["is_admitted"] == 1 or app["is_day_surgery"] == 1:
+                    unarranged_applications.append(app)
+
+
+
         total_applications = arranged_applications + unarranged_applications
         total_room_info = self.sio.get_total_room_info()
         self.logger.info("已排程的申请长度为{}".format(len(arranged_applications)))
@@ -278,12 +299,12 @@ class Schedule():
         for k in set_k:
             startTime_k[k] = 0.0
         time_j = {}  # 手术j的预计时长
-        whether_arranged_s1 = {}  # 手术j是否在第一阶段被安排
+        whether_arranged = {}  # 手术j是否在第一阶段被安排
         for application in total_applications:
             if application in arranged_applications:
-                whether_arranged_s1[application['id']] = 1
+                whether_arranged[application['id']] = 1
             else:
-                whether_arranged_s1[application['id']] = 0
+                whether_arranged[application['id']] = 0
             if application['surgeon_code'] not in set_i:
                 set_i.append(application['surgeon_code'])
             if application['id'] not in set_j:
@@ -381,7 +402,7 @@ class Schedule():
         for application in total_applications:
             self.logger.info("当前待排申请{}".format(application))
             unavailable_rooms[application['id']] = list(set(set_k) - set(self.sio.get_available_rooms(application)))
-            self.logger.info("是否在第一阶段固定:" + str(whether_arranged_s1[application['id']]))
+            self.logger.info("是否在第一阶段固定:" + str(whether_arranged[application['id']]))
             self.logger.info("可行术间：")
             for _ in list(set(set_k) - set(unavailable_rooms[application['id']])):
                 self.logger.info(str(self.sio.get_room_info_from_id(_)))
@@ -390,8 +411,8 @@ class Schedule():
             para_mj[application['apply_dept']][application['id']] = 1
 
         for j in set_j:
-            # self.logger.info("手术编号", j, "不可行术间", unavailable_rooms[j], "是否在第一阶段固定", whether_arranged_s1[j])
-            if whether_arranged_s1[j] == 0:
+            # self.logger.info("手术编号", j, "不可行术间", unavailable_rooms[j], "是否在第一阶段固定", whether_arranged[j])
+            if whether_arranged[j] == 0:
                 model += (pulp.lpSum([var_jk[j][k] for k in unavailable_rooms[j]]) == 0,
                           'ConditionOf' + 'Surgery' + str(j))
 
@@ -446,10 +467,10 @@ class Schedule():
                          >= var_ik[i][k], 'DefineVarOf' + 'Doctor' + str(i) + 'Room' + str(k) + '2'
 
                 # 添加【约束】：定义var_ik_2（表示：医生i在二轮是否在手术间k排了手术）
-                model += pulp.lpSum([var_jk[j][k] * para_ij[i][j] * (1 - whether_arranged_s1[j]) for j in set_j]) \
+                model += pulp.lpSum([var_jk[j][k] * para_ij[i][j] * (1 - whether_arranged[j]) for j in set_j]) \
                          <= 100 * var_ik_2[i][k], \
                          'DefineVar222Of' + 'Doctor' + str(i) + 'Room' + str(k) + '1'
-                model += pulp.lpSum([var_jk[j][k] * para_ij[i][j] * (1 - whether_arranged_s1[j]) for j in set_j]) \
+                model += pulp.lpSum([var_jk[j][k] * para_ij[i][j] * (1 - whether_arranged[j]) for j in set_j]) \
                          >= var_ik_2[i][k], \
                          'DefineVar222Of' + 'Doctor' + str(i) + 'Room' + str(k) + '2'
 
@@ -491,9 +512,10 @@ class Schedule():
                      <= max(1, len(set(arranged_doc_roomDepts[i]))), 'ConstrOfRoom_DeptFor' + 'Doctor' + str(i)
 
         # 【目标】最大化排上手术的总权重
-        model += pulp.lpSum([var_jk[j][k] * set_weight[j] * (1 - whether_arranged_s1[j]) for k in set_k
+        model += pulp.lpSum([var_jk[j][k] * set_weight[j] * (1 - whether_arranged[j]) for k in set_k
                              for j in set_j]), 'Obj'
-
+        
+        self.logger.info("开始求解优化模型，时间限制为100秒")
         solver = pulp.PULP_CBC_CMD(timeLimit=100)  # 算法运行时间不超过100秒
         model.solve(solver)
         # 确保模型已经成功求解
@@ -503,7 +525,7 @@ class Schedule():
                     if var_jk[j][k].varValue is not None and int(var_jk[j][k].varValue) == 1:
                         # self.logger.info(f"var_jk[{j}][{k}] = {var_jk[j][k].varValue}")
                         # self.logger.info(j, set_weight[j], self.sio.get_available_rooms(j))
-                        # self.logger.info("是否在第一阶段已固定", whether_arranged_s1[j])
+                        # self.logger.info("是否在第一阶段已固定", whether_arranged[j])
                         pass
             for k in set_k:
                 # self.logger.info("术间", k, "总用时", sum(int(var_jk[j][k].varValue) * (time_j[j] + 0.5) for j in set_j), "小时")
@@ -514,26 +536,22 @@ class Schedule():
             self.room_surgery[k] = []
             for app in total_applications:
                 if int(var_jk[app['id']][k].varValue) == 1:
-                    app["arranged_status"] = 2 if app["arranged_status"] == 0 else app["arranged_status"]
+                    app["arranged_status"] = ARRANGED_STATUS if app["arranged_status"] == 0 else app["arranged_status"]
                     self.room_surgery[k].append(app)
 
         # 排序
         for k in set_k:
             for app in self.room_surgery[k]:
                 assert app["is_infected_hiv"] in [0, 1], "手术{}的感染状态非法".format(app)
+                assert app["arranged_status"] in [0, 1, 2, 3], "未知手术排程状态{}".format(app["arranged_status"])
 
-
-
-                if app["arranged_status"] == 1:
-                    assert isinstance(app['arranged_start_time'], datetime), "手术{}的开始时间非法".format(app)
-                    assert isinstance(app['arranged_end_time'], datetime), "手术{}的结束时间非法".format(app)
-
-                elif app["arranged_status"] == 2:
+                if app["arranged_status"] == ARRANGED_STATUS:
                     app['arranged_start_time'] = datetime.max
                     if k in unavailable_rooms[app['id']]:
                         self.logger.error("{}在排班中不可排到该手术室集{}".format(app, unavailable_rooms[app['id']]))
                 else:
-                    raise ValueError("手术{}未知的排班状态".format(app))
+                    assert isinstance(app['arranged_start_time'], datetime), "手术{}的开始时间非法".format(app)
+                    assert isinstance(app['arranged_end_time'], datetime), "手术{}的结束时间非法".format(app)
 
             self.room_surgery[k].sort(key=lambda x: (
                 x['arranged_start_time'],
@@ -546,6 +564,8 @@ class Schedule():
 
         stage_1st_finished = []
         stage_2st_finished = []
+        stage_3st_finished = []
+
 
         for room_id, applications in self.room_surgery.items():
             # 每个手术室从8:00开始,转换为datetime.time
@@ -565,20 +585,24 @@ class Schedule():
                     stage_1st_finished.append(application)
                 elif application["arranged_status"] == 2:
                     stage_2st_finished.append(application)
+                elif application["arranged_status"] == 3:
+                    stage_3st_finished.append(application)
                 else:
                     raise ValueError("手术排程状态（arranged_status）异常，异常申请为{}".format(application))
 
         # 填写未排程的申请的原因
         stage_1st_finished_ids = [_["id"] for _ in stage_1st_finished]
         stage_2st_finished_ids = [_["id"] for _ in stage_2st_finished]
+        stage_3st_finished_ids = [_["id"] for _ in stage_3st_finished]
         for app in total_applications:
-            if app["id"] not in stage_1st_finished_ids and app["id"] not in stage_2st_finished_ids:
+            if app["id"] not in stage_1st_finished_ids and app["id"] not in stage_2st_finished_ids and app["id"] not in stage_3st_finished_ids:
                 self.logger.warning("申请{}未被排程".format(app))
-                self.sio.update_unscheduled_reason(app['id'], " 该手术二阶段抢单排程未成功（可能原因多样）", append=True)
+                self.sio.update_unscheduled_reason(app['id'], f"该手术第{ARRANGED_STATUS}抢单排程未成功（可能原因多样）", append=True)
 
         self.logger.info(f"排好结果汇总完成，申请数为{len(total_applications)}")
         self.logger.info(f"第一阶段完成数{len(stage_1st_finished)}")
         self.logger.info(f"第二阶段完成数{len(stage_2st_finished)}")
+        self.logger.info(f"第三阶段完成数{len(stage_3st_finished)}")
 
         self.sio.write_result_to_db(res_2)
         self.sio.validation_check()

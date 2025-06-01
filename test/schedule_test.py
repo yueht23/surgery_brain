@@ -179,5 +179,52 @@ def test_schedule_second_infectious(schedule_date):
 
 
 
+@pytest.mark.order(2)
+@pytest.mark.parametrize("schedule_date", ["2025-04-15", "2025-04-16", "2025-04-17"])
+def test_schedule_third_basic(schedule_date):
+    """测试二期抢单排程"""
+    logger = Logger(__name__).get_logger()
+    logger.info(f"开始测试二期排程,排程日期:{schedule_date}")
+
+    try:
+        # 准备测试数据
+        assert execute_sql_file("./sql/setup/init.sql")
+        assert execute_sql_file("./sql/fixtures/test_case_1.sql")
+
+        errors = []
+
+        # 执行一期排程
+        schedule = Schedule(schedule_date)
+
+        schedule.schedule_first()
+        errors.extend(validate_schedule_result())
+        schedule.gantt_chart()
+        schedule.sio.sync_info_python_to_info(drop_ratio=0) 
+
+
+
+        schedule. schedule_sec(ARRANGED_STATUS=2)
+        errors.extend(validate_schedule_result())
+        schedule.gantt_chart()
+        schedule.sio.sync_info_python_to_info(drop_ratio=0) 
+
+
+        schedule. schedule_sec(ARRANGED_STATUS=3)
+        errors.extend(validate_schedule_result())
+        schedule.gantt_chart()
+        schedule.sio.sync_info_python_to_info(drop_ratio=0) 
+
+
+        assert len(errors) == 0, f"排程结果验证失败: {errors}"
+        
+    except Exception as e:
+        logger.error("一期排程测试失败,错误详情如下:")
+        logger.error(traceback.format_exc())
+        raise e
+    finally:
+        execute_sql_file("./sql/teardown/cleanup.sql")   
+
+
+
 if __name__ == "__main__":
     pytest.main(["-v", __file__])
