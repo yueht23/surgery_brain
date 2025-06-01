@@ -11,6 +11,14 @@ INSERT INTO surgicalapplication_info_port (SELECT * FROM zhihuishoshudanao_0417.
 UPDATE surgicalapplication_info_port t SET t.scheduling_state = 0 WHERE 1;
 
 
+-- 在surgicalapplication_info_port表中添加一个字段 CURR_WARD_NAME
+ALTER TABLE surgicalapplication_info_port ADD COLUMN CURR_WARD_NAME VARCHAR(255);
+
+
+-- 随机将CURR_WARD_NAME的字段设置为，入院服务中心、OTHER
+UPDATE surgicalapplication_info_port t SET t.CURR_WARD_NAME = 'OTHER' WHERE 1;
+UPDATE surgicalapplication_info_port t SET t.CURR_WARD_NAME = '入院服务中心' WHERE MOD(t.ELECTR_REQUISITION_NO, 11) = 0;
+
 CREATE TABLE surgicalapplicationinfo_python LIKE zhihuishoshudanao_0417.surgicalapplicationinfo_python;
 CREATE TABLE surgicalapplicationinfo LIKE zhihuishoshudanao_0417.surgicalapplicationinfo;
 

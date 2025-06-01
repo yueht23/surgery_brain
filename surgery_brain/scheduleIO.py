@@ -138,10 +138,10 @@ class ScheduleIO():
               END AS 'is_mini_invasive',-- 是否微创
             CASE
                 
-                WHEN sip.IN_STATE = '0' THEN
+                WHEN sip.CURR_WARD_NAME = '入院服务中心' THEN
                 FALSE 
-                  WHEN sip.IN_STATE = '1' THEN
-                TRUE ELSE NULL 
+                  ELSE
+                TRUE 
               END AS 'is_admitted',-- 是否已入院, 三阶段排程要用
             CASE
                 
