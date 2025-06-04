@@ -597,7 +597,11 @@ class Schedule():
         for app in total_applications:
             if app["id"] not in stage_1st_finished_ids and app["id"] not in stage_2st_finished_ids and app["id"] not in stage_3st_finished_ids:
                 self.logger.warning("申请{}未被排程".format(app))
-                self.sio.update_unscheduled_reason(app['id'], f"该手术第{ARRANGED_STATUS}抢单排程未成功（可能原因多样）", append=True)
+                _ = {
+                    2: "一",
+                    3: "二",
+                }
+                self.sio.update_unscheduled_reason(app['id'], f"该手术第{_[ARRANGED_STATUS]}次抢单排程未成功（可能原因多样）", append=True)
 
         self.logger.info(f"排好结果汇总完成，申请数为{len(total_applications)}")
         self.logger.info(f"第一阶段完成数{len(stage_1st_finished)}")
