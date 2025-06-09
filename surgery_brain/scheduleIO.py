@@ -22,52 +22,61 @@ class ScheduleIO():
         self.sqlalchemy_engine = get_sqlalchemy_engine()
         self.logger.info("ScheduleIO initialized.")
 
+
+    def __snapshot(self, prefix, sql, max_cnt=5):
+        """
+        创建一个带时间戳的快照表，并执行SQL查询将数据复制到快照表。
+        同时维护最多max_cnt个快照表，删除最旧的。
+        
+        Args:
+            prefix (str): 快照表名前缀
+            sql (str): 要执行的SQL查询语句
+            max_cnt (int): 最多保留的快照表数量
+            
+        Returns:
+            str: 新创建的快照表名
+        """
+        try:
+            snapshot_name = f'{prefix}_snapshot_' + datetime.now().strftime("%Y%m%d%H%M%S")
+            create_sql = f"""
+                CREATE TABLE IF NOT EXISTS {snapshot_name}
+                AS
+                {sql}
+            """
+            execute_sql(create_sql)
+            self.logger.info(f"表快照成功，快照表名为: {snapshot_name}")
+
+            # 获取所有快照表
+            list_sql = f"""
+                SELECT TABLE_NAME
+                FROM information_schema.TABLES
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME LIKE '{prefix}_snapshot_%'
+            """
+            tables = query_all_dict(list_sql)
+            tables = [table['TABLE_NAME'] for table in tables]
+            self.logger.info(f"{prefix}表快照共计{len(tables)}张")
+            
+            # 按时间戳排序并删除最旧的表
+            tables.sort(key=lambda x: datetime.strptime(x.split("_")[-1], "%Y%m%d%H%M%S"))
+            while len(tables) > max_cnt:
+                drop_sql = f"""
+                    DROP TABLE IF EXISTS {tables[0]}
+                """
+                execute_sql(drop_sql)
+                self.logger.info(f"删除最旧的快照表成功，快照表名为: {tables[0]}")
+                tables.pop(0)
+                
+            return snapshot_name
+
+        except Exception as e:
+            self.logger.error(f"{prefix}表快照失败: {e}")
+
     def import_surgeries(self):
         """
         从surgericalapplicationinfo_port表中导入手术并预处理手术数据到
         surgicalapplicationinfo_python表中，方便后续排程
         :return:
         """
-
-        def snapshot_surgeries():
-            """
-            将surgicalapplication_info_port中日期为schedule_date的手术数据快照到
-            surgicalapplication_info_port_snapshot_YYYYMMDDHHMMSS表中
-            同时删除最旧的快照表
-            :return:
-            """
-            try:
-                snapshot_name = 'surgicalapplication_info_snapshot_' + datetime.now().strftime("%Y%m%d%H%M%S")
-                sql = f"""
-                    CREATE TABLE IF NOT EXISTS {snapshot_name}
-                    AS
-                    SELECT * FROM surgicalapplication_info_port
-                    WHERE surgicalapplication_info_port.SURGERY_DATE LIKE '{self.schedule_date}%'
-                """
-                execute_sql(sql)
-                self.logger.info(f"info_port表快照成功，快照表名为: {snapshot_name}")
-
-                sql = """
-                    SELECT TABLE_NAME
-                    FROM information_schema.TABLES
-                    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME LIKE 'surgicalapplication_info_snapshot_%'
-                """
-
-                tables = query_all_dict(sql)
-                tables = [table['TABLE_NAME'] for table in tables]
-                self.logger.info("info_port表快照共计{}张".format(len(tables)))
-                tables.sort(key=lambda x: datetime.strptime(x.split("_")[-1], "%Y%m%d%H%M%S"))
-                while len(tables) > 5:
-                    sql = f"""
-                        DROP TABLE IF EXISTS {tables[0]}
-                    """
-                    execute_sql(sql)
-                    self.logger.info("删除最旧的快照表成功，快照表名为: {}".format(tables[0]))
-                    tables.pop(0)
-
-            except Exception as e:
-                self.logger.error("info_port表快照失败: {}".format(e))
-
         def get_apply_depts_whitelist():
             """
             获取申请科室白名单
@@ -97,7 +106,10 @@ class ScheduleIO():
             return whitelist
 
         execute_sql("DROP TABLE IF EXISTS surgicalapplicationinfo_python")
-        snapshot_surgeries()
+        
+        self.__snapshot('surgicalapplication_info_port', f"""SELECT * FROM surgicalapplication_info_port WHERE SURGERY_DATE LIKE '{self.schedule_date}%'""")
+        self.__snapshot('surgicalapplicationinfo', f""" SELECT * FROM surgicalapplicationinfo WHERE pseudo_operation_data LIKE '{self.schedule_date}%'""")
+
 
 
         sql = f"""
@@ -526,6 +538,8 @@ class ScheduleIO():
                        application['arranged_end_time'],
                        application['id'])
             execute_sql(sql)
+            
+        self.__snapshot('surgicalapplicationinfo_python', f""" SELECT * FROM surgicalapplicationinfo_python""",max_cnt=10)
         self.logger.info("回写数据库完成")
 
     def update_unscheduled_reason(self, id, reason, append=False):
@@ -582,6 +596,7 @@ class ScheduleIO():
         # rename columns to match the columns in surgicalapplicationinfo
         rename_dict = {
             'id': 'application_number',
+            'surgery_date':'pseudo_operation_data',
             'arranged_room_id': 'arrange_operating_room_number',
             'arranged_room_dept': 'arrange_operating_number',
             'arranged_room_name': 'arrange_operating_room',
