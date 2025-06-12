@@ -11,4 +11,5 @@ urlpatterns = [
     path('sync_info_python_to_info', views.sync_info_python_to_info),
     path('gantt_chart', views.gantt_chart),
     path('hello_world', views.hello_world),
+    path('get_db_settings', views.get_db_settings),
 ]

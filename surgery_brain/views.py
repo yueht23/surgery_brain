@@ -5,6 +5,9 @@ from .schedule2 import Schedule
 
 from common.logger import Logger
 import traceback
+from django.conf import settings
+from django.http import JsonResponse
+
 
 
 def get_first_schedule(request):
@@ -104,3 +107,9 @@ def hello_world(request):
     elif request.method == 'GET':
         logger.info("hello_world and  GET")
         return HttpResponse("GET:hello world", status=200)
+
+def get_db_settings(request):
+    db_settings = {
+        "DATABASES": settings.DATABASES
+    }
+    return JsonResponse(db_settings)
