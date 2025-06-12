@@ -72,26 +72,27 @@ WSGI_APPLICATION = 'c2matica_py_server.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/2.2/ref/settings/#databases
 
+# 从环境变量中读取数据库配置
+MYSQL_DATABASE = os.environ.get('MYSQL_DATABASE')
+if not MYSQL_DATABASE:
+    raise ValueError("环境变量 MYSQL_DATABASE 未设置")
 
-env = "local"
-assert env in ["online-test", "online-real", "local"]
+MYSQL_HOST = os.environ.get('MYSQL_HOST')
+if not MYSQL_HOST:
+    raise ValueError("环境变量 MYSQL_HOST 未设置")
 
-if env == "online-test":
-    MYSQL_DATABASE = 'abc'
-    MYSQL_HOST = '192.170.201.161'
-elif env == "online-real":
-    MYSQL_DATABASE = 'zhihuishoshudanao'
-    MYSQL_HOST = '192.170.201.161'
-elif env == "local":
-    MYSQL_DATABASE = 'zhihuishoshudanao'
+MYSQL_USERNAME = os.environ.get('MYSQL_USERNAME')
+if not MYSQL_USERNAME:
+    raise ValueError("环境变量 MYSQL_USERNAME 未设置")
 
-    MYSQL_HOST = 'localhost'
-else:
-    raise ValueError(f"Unsupported environment: {env}")
+MYSQL_PASSWORD = os.environ.get('MYSQL_PASSWORD')
+if not MYSQL_PASSWORD:
+    raise ValueError("环境变量 MYSQL_PASSWORD 未设置")
 
-MYSQL_USERNAME = 'root'
-MYSQL_PASSWORD = 'C2matica!'
-MYSQL_PORT = '3306'
+MYSQL_PORT = os.environ.get('MYSQL_PORT')
+if not MYSQL_PORT:
+    raise ValueError("环境变量 MYSQL_PORT 未设置")
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
