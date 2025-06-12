@@ -56,3 +56,6 @@ logs/
 *.pyc
 
 Dockerfile
+
+
+.env
