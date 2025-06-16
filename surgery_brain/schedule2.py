@@ -650,11 +650,22 @@ class Schedule():
             df = pd.DataFrame(arranged_applications)
             df['arranged_start_time'] = df['arranged_start_time'].apply(lambda x: x.strftime("%Y-%m-%d %H:%M:%S"))
             df['arranged_end_time'] = df['arranged_end_time'].apply(lambda x: x.strftime("%Y-%m-%d %H:%M:%S"))
-
-            df["room"] =  df["arranged_room_dept"]  +  df["arranged_room_name"]  + "(" +  df["arranged_room_id"].astype(str)  + ")"
+            df["room"] =  df["arranged_room_dept"]  +"|"+  df["arranged_room_name"]  + "|" +  df["arranged_room_id"].astype(str) 
             df = df.sort_values(by="room")
             df["排程阶段"] = df["arranged_status"].map({1: "手术日排程", 2: "第一次抢单排程", 3: "第二次抢单排程"})
             cm = {"手术日排程":"green", "第一次抢单排程":"blue", "第二次抢单排程":"orange"}
+
+
+            def sort_fun(x):
+                dept,name,_ = x.split("|")
+                if dept == "第一手术部":
+                    priority = 2
+                elif dept == "第二手术部":
+                    priority = 1
+                elif dept == "日间手术室":
+                    priority = 0
+                return priority,-int(name)
+            room_order = sorted(df["room"].unique(),key=sort_fun)
 
             fig = px.timeline(df,
                               x_start="arranged_start_time",
@@ -663,7 +674,17 @@ class Schedule():
                               title="手术日排程甘特图",
                               hover_data=["id", "apply_dept","surgeon_name", "duration", "t_seq","is_infected_air"],
                               color="排程阶段",
-                              color_discrete_map=cm)
+                              color_discrete_map=cm,
+                              category_orders={"room": room_order})  # 固定y轴顺序
+
+            # 更新布局以固定y轴
+            fig.update_layout(
+                yaxis=dict(
+                    categoryorder='array',
+                    categoryarray=room_order
+                )
+            )
+            
             fig.show()
             self.logger.info("甘特图绘制成功")
 
