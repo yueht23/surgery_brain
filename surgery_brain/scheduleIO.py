@@ -425,14 +425,39 @@ class ScheduleIO():
         获取未安排手术的申请
         :return: list[dict], 未安排手术的申请列表
         """
-        return self.__get_applications(is_arranged=False)
+        unarranged_applications = self.__get_applications(is_arranged=False)
+        for app in unarranged_applications:
+            try:
+                assert app["arranged_status"] == 0
+                assert app["arranged_room_id"] is None
+                assert app["arranged_room_dept"] is None
+                assert app["arranged_room_name"] is None
+                assert app["arranged_start_time"] is None
+                assert app["arranged_end_time"] is None
+            except Exception as e:
+                self.logger.error(f"未排程手术{app['id']}的信息有误，错误为：{e}")
+                raise ValueError(f"未排程手术{app['id']}的信息有误，错误为：{e}")
+        return unarranged_applications
 
     def get_arranged_applications(self):
         """
         获取已安排手术的申请
         :return: list[dict], 已安排手术的申请列表
         """
-        return self.__get_applications(is_arranged=True)
+        arranged_applications = self.__get_applications(is_arranged=True)
+        for app in arranged_applications:
+            try:
+                assert app["arranged_status"] > 0
+                assert app["arranged_room_id"] is not None and app["arranged_room_id"] != ""
+                assert app["arranged_room_dept"] is not None and app["arranged_room_dept"] != ""
+                assert app["arranged_room_name"] is not None and app["arranged_room_name"] != ""
+                assert app["arranged_start_time"] is not None and isinstance(app["arranged_start_time"],datetime)
+                assert app["arranged_end_time"] is not None and isinstance(app["arranged_end_time"],datetime)
+                assert app["arranged_start_time"] < app["arranged_end_time"]
+            except Exception as e:
+                self.logger.error(f"已排程手术{app['id']}的信息有误，错误为：{e}")
+                raise ValueError(f"已排程手术{app['id']}的信息有误，错误为：{e}")
+        return arranged_applications
 
     def get_available_rooms(self, application):
         """
