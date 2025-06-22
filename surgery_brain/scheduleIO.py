@@ -410,12 +410,12 @@ class ScheduleIO():
                 except ValueError as e:
                     raise ValueError("手术申请{}的arranged_status!=0,但是其arranged_start_time，arranged_end_time格式错误，错误为：{}".format(application,e))
             else:
-                if application['arranged_start_time'] != "" or application['arranged_start_time'] != None:
+                if application['arranged_start_time'] is not None:
+                    self.logger.warning("手术申请{}的arranged_status=0,但是其arranged_start_time不为空而是{},请检查".format(application,application['arranged_start_time']))    
                     application['arranged_start_time'] = None
-                    self.logger.warning("手术申请{}的arranged_status=0,但是其arranged_start_time不为空，请检查".format(application))    
-                if application['arranged_end_time'] != "" or application['arranged_end_time'] != None:
+                if application['arranged_end_time'] is not None:
+                    self.logger.warning("手术申请{}的arranged_status=0,但是其arranged_end_time不为空而是{},请检查".format(application,application['arranged_end_time']))
                     application['arranged_end_time'] = None
-                    self.logger.warning("手术申请{}的arranged_status=0,但是其arranged_end_time不为空，请检查".format(application))
 
 
         return applications
