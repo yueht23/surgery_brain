@@ -480,6 +480,7 @@ class ScheduleIO():
         if application["is_infected_air"]:
             # TODO: 一部23号
             # 当前逻辑是写死的，需要前端可改
+            self.logger.info(f"手术申请单号{application['id']}为空气感染手术，直接放在一部23号")
             return ["2619"]
 
 
