@@ -403,9 +403,11 @@ class Schedule():
             self.logger.info("当前待排申请{}".format(application))
             unavailable_rooms[application['id']] = list(set(set_k) - set(self.sio.get_available_rooms(application)))
             self.logger.info("是否在第一阶段固定:" + str(whether_arranged[application['id']]))
-            self.logger.info("可行术间：")
-            for _ in list(set(set_k) - set(unavailable_rooms[application['id']])):
-                self.logger.info(str(self.sio.get_room_info_from_id(_)))
+
+            if not whether_arranged[application['id']]: # 已经安排了，则不显示可行术间
+                self.logger.info("可行术间：")
+                for _ in list(set(set_k) - set(unavailable_rooms[application['id']])):
+                    self.logger.info(str(self.sio.get_room_info_from_id(_)))
 
             para_ij[application['surgeon_code']][application['id']] = 1
             para_mj[application['apply_dept']][application['id']] = 1
