@@ -167,6 +167,69 @@ class Schedule():
         self.sio.write_result_to_db(res)
         self.sio.validation_check()
 
+    def generate_stage2_weights(self, unarranged_applications, total_applications):
+        """
+        生成二阶段排程的权重，包括日间手术和择期手术的百分比权重，并计算每个申请的总权重。
+        :param unarranged_applications: 未排程的手术申请列表
+        :param total_applications: 所有手术申请列表（已排程+未排程）
+        :return: None，直接修改传入的application对象
+        """
+        # 用inpatient_serial序列号来表示手术申请的先后顺序
+        # inpatient_serial越大，手术申请越靠后，其权重越小
+        df_day_surgery = pd.DataFrame([app for app in unarranged_applications if app['is_day_surgery'] == 1])
+        df_elective_surgery = pd.DataFrame([app for app in unarranged_applications if not app['is_day_surgery'] == 1])
+        if not df_day_surgery.empty:
+            df_day_surgery["day_percentage"] = df_day_surgery['inpatient_serial'].rank(method='average', ascending=False)
+            df_day_surgery["day_percentage"] = df_day_surgery["day_percentage"] / len(df_day_surgery)
+        if not df_elective_surgery.empty:
+            df_elective_surgery["elective_percentage"] = df_elective_surgery['inpatient_serial'].rank(method='average', ascending=False)
+            df_elective_surgery["elective_percentage"] = df_elective_surgery["elective_percentage"] / len(df_elective_surgery)
+        # 只有对于已经排程的手术，才需要考虑day_percentage和elective_percentage两项权重
+        for app in unarranged_applications:
+            if app['is_day_surgery'] == 1:
+                app["day_percentage"] = df_day_surgery[df_day_surgery["id"] == app["id"]]["day_percentage"].values[0]
+            else:
+                app["elective_percentage"] = df_elective_surgery[df_elective_surgery["id"] == app["id"]]["elective_percentage"].values[0]
+
+        self.logger.info("二阶段权重构造")
+        for application in total_applications:
+            self.logger.info("")
+            self.logger.info("当前待排申请{}".format(application))
+
+            # 用于记录各项权重的构成
+            # key:子项权重->val:该子项权重的权重
+            weight2 = dict()
+
+            # 特殊手术
+            weight2["is_sp_robot"] = 10 if application["is_sp_robot"] else 0
+            weight2["is_sp_intervention"] = 10 if application["is_sp_intervention"] else 0
+            weight2["is_sp_perspective"] = 10 if application["is_sp_perspective"] else 0
+            weight2["is_sp_holmium"] = 10 if application["is_sp_holmium"] else 0
+
+            # 抢单失败次数
+            weight2["attempt_times"] = 2 * application["attempt_times"]
+
+            # 日间手术
+            if application["is_day_surgery"]:
+                weight2["is_day_surgery"] = 3
+                weight2["day_percentage"] = application.get("day_percentage", 0)
+            # 择期手术
+            else:
+                weight2["elective_percentage"] = application.get("elective_percentage", 0)
+
+            # 国考四级手术
+            weight2["surgery_level"] = 3 if application["surgery_level"] == "4" else 0
+
+            # 手术优先操作
+            weight2["is_operation"] = 3 if not application["is_operation"] else 0
+
+            # 微创优先非微创
+            weight2["is_mini_invasive"] = 3 if application["is_mini_invasive"] else 0
+
+            application["weight2"] = sum(weight2.values())
+            self.logger.info("当前申请的总权重为{}".format(application["weight2"]))
+            self.logger.info("当前申请的权重的构成为{}".format(weight2))
+
     def schedule_sec(self, ARRANGED_STATUS=2):
         """
         抢单排程
@@ -204,64 +267,8 @@ class Schedule():
 
         # 用inpatient_serial序列号来表示手术申请的先后顺序
         # inpatient_serial越大，手术申请越靠后，其权重越小
-        df_day_surgery = pd.DataFrame([app for app in unarranged_applications if app['is_day_surgery'] == 1])
-        df_elective_surgery = pd.DataFrame([app for app in unarranged_applications if not app['is_day_surgery'] ==1])
-        if not df_day_surgery.empty:
-            df_day_surgery["day_percentage"] = df_day_surgery['inpatient_serial'].rank(method='average',ascending=False)
-            df_day_surgery["day_percentage"] = df_day_surgery["day_percentage"] /len(df_day_surgery)
-        if not df_elective_surgery.empty:
-            df_elective_surgery["elective_percentage"] = df_elective_surgery['inpatient_serial'].rank( method='average', ascending=False)
-            df_elective_surgery["elective_percentage"] = df_elective_surgery["elective_percentage"] / len(df_elective_surgery)
-        # 只有对于已经排程的手术，才需要考虑day_percentage和elective_percentage两项权重
-        for app in unarranged_applications:
-            if app['is_day_surgery'] == 1:
-                app["day_percentage"] = df_day_surgery[df_day_surgery["id"] == app["id"]]["day_percentage"].values[0]
-            else:
-                app["elective_percentage"] = df_elective_surgery[df_elective_surgery["id"] == app["id"]]["elective_percentage"].values[0]
+        self.generate_stage2_weights(unarranged_applications, total_applications)
 
-
-        self.logger.info("二阶段权重构造")
-        for application in total_applications:
-            self.logger.info("")
-            self.logger.info("当前待排申请{}".format(application))
-
-            # 用于记录各项权重的构成
-            # key:子项权重->val:该子项权重的权重
-            weight2 = dict()
-
-            # 特殊手术
-
-            weight2["is_sp_robot"] = 10 if application["is_sp_robot"] else 0
-            weight2["is_sp_intervention"] = 10 if application["is_sp_intervention"] else 0
-            weight2["is_sp_perspective"] = 10 if application["is_sp_perspective"] else 0
-            weight2["is_sp_holmium"] = 10 if application["is_sp_holmium"] else 0
-
-            # weight2 +=   # 先申请先使用,暂不考虑申请提交时间
-
-            # 抢单失败次数
-            weight2["attempt_times"] = 2 * application["attempt_times"]
-
-            # 日间手术
-            if application["is_day_surgery"]:
-                weight2["is_day_surgery"] = 3
-                weight2["day_percentage"] = application.get("day_percentage", 0)
-            # 择期手术
-            else:
-                weight2["elective_percentage"] = application.get("elective_percentage", 0)
-
-            # 国考四级手术
-            weight2["surgery_level"] = 3 if application["surgery_level"] == "4" else 0
-
-            # 手术优先操作
-            weight2["is_operation"] = 3 if not application["is_operation"] else 0
-
-            # 微创优先非微创
-            weight2["is_mini_invasive"] = 3 if application["is_mini_invasive"] else 0
-
-            application["weight2"] = sum(weight2.values())
-            self.logger.info("当前申请的总权重为{}".format(application["weight2"]))
-            self.logger.info("当前申请的权重的构成为{}".format(weight2))
-        self.logger.info("二阶段权重构造完成")
         """
          变量/参数：
          set_i：向量：医生的集合
