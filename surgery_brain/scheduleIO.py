@@ -273,7 +273,33 @@ class ScheduleIO():
                     operating_room_info
             """
             self.__total_rooms_info = {}
+
+            """
+            当前我们只考虑：
+                - '第一手术部' 的 '01' '02' '03' '04' '05' '06' '07' '08' '09' '10' '11' '12' '13' '15' '16' '17' '18' '19' '20' '21' '23' '26' 共计22个
+                - '第二手术部' 的 '01' '02' '03' '04' '05' '09' 共计6个 
+                - '日间手术室' 的 '1'， '5' 共计2个
+            """
+            # TODO: 所要考虑的术间的白名单数据应该从数据库中获取，而不是代码中写死
+            first_dept_valid_room_ids = set(["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13", "15", "16", "17", "18", "19", "20", "21", "23", "26"])
+            second_dept_valid_room_ids = set(["01", "02", "03", "04", "05", "09"])
+            day_surgery_valid_room_ids = set(["1", "5"])
+
+
             for row in query_all_dict(sql):
+                assert isinstance(row["id"],int)
+                assert isinstance(row["operating_department"],str)
+                assert isinstance(row["real_name"],str)
+
+                if row["operating_department"] == "第一手术部":
+                    if row["real_name"] not in first_dept_valid_room_ids:
+                        continue
+                elif row["operating_department"] == "第二手术部":
+                    if row["real_name"] not in second_dept_valid_room_ids:
+                        continue
+                elif row["operating_department"] == "日间手术室":
+                    if row["real_name"] not in day_surgery_valid_room_ids:
+                        continue
                 self.__total_rooms_info[row["id"]] = (row["operating_department"], row["real_name"])
         return self.__total_rooms_info
 
@@ -284,6 +310,9 @@ class ScheduleIO():
         :param room_id: int, 手术室id
         :return: tuple, 手术室信息, (operating_department, real_name)
         """
+        if int(room_id) not in self.get_total_room_info():
+            valid_room_ids = [str(k) + ":" + (str(v)) for k,v in self.get_total_room_info().items()]
+            raise ValueError(f"手术室id为{room_id}不在白名单中，当前白名单为{','.join(valid_room_ids)}")
         return self.get_total_room_info()[int(room_id)]
 
     def __get_dept_seq_to_room_id_df(self):
