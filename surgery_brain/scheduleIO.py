@@ -125,6 +125,7 @@ class ScheduleIO():
             sip.INHOSP_INDEX_NO AS 'admission_number',-- 住院号 NOTE: 排程用不到，但是前端需要, 其与inpatient_serial相同
             sip.INHOSP_INDEX_NO AS 'inpatient_serial',-- 住院流水号
             sip.PAT_NAME AS 'patient_name',-- 患者姓名
+            sip.SURGERY_DEPT_NAME AS 'surgery_dept_name', -- 手术所在的部，可选值：第一手术部，第二手术部，日间手术室
             sip.APPLY_DEPT_NAME AS 'apply_dept',-- 申请科室名称
             sip.SURGERY_DR_NAME AS 'surgeon_name',-- 主刀医生姓名
             sip.SURGERY_DR_CODE AS 'surgeon_code',-- 主刀医生id

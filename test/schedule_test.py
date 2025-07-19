@@ -59,6 +59,15 @@ def validate_schedule_result():
         mask &= df_arranged["arranged_end_time"] > row["arranged_end_time"]
         if len(df_arranged.loc[mask]) > 0:
             errors.append(f"HIV感染手术不是该医生在该术间的最后一台手术, id:{row['id']}")
+    
+    # 抢单手术不出部，手术日手术可能出部
+    for _, row in df_arranged.iterrows():
+        if row["arranged_status"] == 1:
+            continue
+        if row["surgery_dept_name"] != row["arranged_room_dept"]:
+            # errors.append(f"抢单手术{row['id']}的所在手术部与安排手术室部不一致,所在手术部:{row['surgery_dept_name']},安排手术室部:{row['arranged_room_dept']}")
+            Logger(__name__).get_logger().warning(f"抢单手术{row['id']}的所在手术部与安排手术室部不一致,所在手术部:{row['surgery_dept_name']},安排手术室部:{row['arranged_room_dept']}")
+
   
     return errors
 
