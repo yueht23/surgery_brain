@@ -6,6 +6,8 @@ import pandas as pd
 import pulp
 
 
+
+
 class Schedule():
     def __init__(self, schedule_date):
         self.logger = Logger(__name__).get_logger()
@@ -26,12 +28,8 @@ class Schedule():
         定义一轮手术日确定性排程的所需数据结构
         """
         self.doctor_workload = {}
-        self.rooms = {}  # 术间
+        self.rooms = {}  # 术间id -> applications的映射，抢单也用这个结构
 
-        """
-        定义二轮抢单排程的所需数据结构
-        """
-        self.room_surgery = {}  # 术间的手术信息
 
         self.logger.info("Schedule initialized")
 
@@ -262,322 +260,87 @@ class Schedule():
 
 
         total_applications = arranged_applications + unarranged_applications
-        total_room_info = self.sio.get_total_room_info()
         self.logger.info("已排程的申请长度为{}".format(len(arranged_applications)))
         self.logger.info("未排程的申请长度为{}".format(len(unarranged_applications)))
         self.logger.info("总的申请长度为{}".format(len(total_applications)))
-
-
         self.__generate_stage2_weights(unarranged_applications, total_applications)
 
-        """
-         变量/参数：
-         set_i：向量：医生的集合
-         set_j：向量：手术（申请号）的集合
-         set_k：向量：手术间的集合
-         set_m：向量：科室的集合
-         set_n: 向量：手术部的集合
-         weight_j：向量：手术的权重
-         time_j：向量：手术的时长
-         var_jk：变量：手术j是否排在手术间k
-         var_ik：变量：手术间k是否排了医生i的手术
-         var_in：变量：医生i的手术是否排在手术部n
-         var_ik_2：变量：医生i在二轮是否在手术间k排了手术
-         var_mk：变量：手术间k是否排了科室m的手术
-         arranged_room_depts_k：字典：手术间k安排了几个科室的手术,{k:[dept]}
-         arranged_dept_rooms_m：字典：科室m的手术被安排在几个术间,{m:[room_id]}
-         arranged_doc_roomDepts_i：字典：医生i的手术被安排在几个手术部,{i:[room_dept]}
-         para_ij：矩阵：手术j是否是i医生的=1/0
-         para_mj：矩阵：手术j是否是m科室的=1/0
-         list_nk: 字典：手术部n的手术间列表{n:[room_id]}
-         startTime_k：向量：第k个手术间里（一轮）已经排好的手术的总时长（包括最后一次接台）
-         finalTime_k：向量：第k个手术间里最后排好的手术的总时长（包括最后一次接台）
-         var_i：变量：医生i在二轮排上的手术是否可以分到2个及以上的手术间里=1/0
-        """
-        # 变量集合
-        set_i = []  # 医生
-        set_j = []  # 手术申请
-        set_m = []  # 科室
-        set_k = list(total_room_info.keys())  # 术间
-        set_k = list(map(str, set_k))
-        set_n = []  # 手术部
-        set_weight = {}  # 权重
-        list_nk = {}  # 手术部n的手术间列表
-        startTime_k = {}  # 术间k可用于抢单的时间段的开始
-        for k in set_k:
-            startTime_k[k] = 0.0
-        time_j = {}  # 手术j的预计时长
-        whether_arranged = {}  # 手术j是否在第一阶段被安排
-        for application in total_applications:
-            if application in arranged_applications:
-                whether_arranged[application['id']] = 1
-            else:
-                whether_arranged[application['id']] = 0
-            if application['surgeon_code'] not in set_i:
-                set_i.append(application['surgeon_code'])
-            if application['id'] not in set_j:
-                set_j.append(application['id'])
-                set_weight[application['id']] = application['weight2']
-            if application['apply_dept'] not in set_m:
-                set_m.append(application['apply_dept'])
-            time_j[application['id']] = application['duration']
 
-        for room in total_room_info.keys():
-            if total_room_info[room][0] not in set_n:
-                set_n.append(total_room_info[room][0])
-
-        for n in set_n:
-            list_nk[n] = []
-
-        for room in total_room_info.keys():
-            if room not in list_nk[total_room_info[room][0]]:
-                list_nk[total_room_info[room][0]].append(str(room))
-
-        # 定义变量和约束条件
-        model = pulp.LpProblem("Stage2", pulp.LpMaximize)
-
-        var_jk = {}
-        for j in set_j:
-            var_jk[j] = {}
-            for k in set_k:
-                var_jk[j][k] = 0
-        var_ik = {}
-        for i in set_i:
-            var_ik[i] = {}
-            for k in set_k:
-                var_ik[i][k] = 0
-        var_ik_2 = {}
-        for i in set_i:
-            var_ik_2[i] = {}
-            for k in set_k:
-                var_ik_2[i][k] = 0
-        var_mk = {}
-        for m in set_m:
-            var_mk[m] = {}
-            for k in set_k:
-                var_mk[m][k] = 0
-        var_in = {}
-        for i in set_i:
-            var_in[i] = {}
-            for n in set_n:
-                var_in[i][n] = 0
-        var_i = {}
-        for i in set_i:
-            var_i[i] = 0
-        para_ij = {}
-        for i in set_i:
-            para_ij[i] = {}
-            for j in set_j:
-                para_ij[i][j] = 0
-        para_mj = {}
-        for m in set_m:
-            para_mj[m] = {}
-            for j in set_j:
-                para_mj[m][j] = 0
-        arranged_room_depts = {}
-        for k in set_k:
-            arranged_room_depts[k] = []
-        arranged_dept_rooms = {}
-        for m in set_m:
-            arranged_dept_rooms[m] = []
-        arranged_doc_roomDepts = {}
-        for i in set_i:
-            arranged_doc_roomDepts[i] = []
-        for k in set_k:
-            for j in set_j:
-                # 添加【变量】：var_jk
-                var_jk[j][k] = pulp.LpVariable(
-                    cat=pulp.LpBinary, name='VariableOf' + 'Surgery' + str(j) + 'Room' + str(k))
-            for i in set_i:
-                # 添加【变量】：var_ik
-                var_ik[i][k] = pulp.LpVariable(
-                    cat=pulp.LpBinary, name='DummyVariableOf' + 'Doctor' + str(i) + 'Room' + str(k))
-                # 添加【变量】：var_ik_2
-                var_ik_2[i][k] = pulp.LpVariable(
-                    cat=pulp.LpBinary, name='DummyVariable222Of' + 'Doctor' + str(i) + 'Room' + str(k))
-            for m in set_m:
-                # 添加【变量】：var_mk
-                var_mk[m][k] = pulp.LpVariable(
-                    cat=pulp.LpBinary, name='DummyVariableOf' + 'Dept' + str(m) + 'Room' + str(k))
-        for i in set_i:
-            for n in set_n:
-                # 添加【变量】：var_in
-                var_in[i][n] = pulp.LpVariable(
-                    cat=pulp.LpBinary, name='DummyVariableOf' + 'Doctor' + str(i) + 'Room_Dept' + str(n))
-
-        # 添加【约束】：手术间条件约束
-        unavailable_rooms = {}  # 不可进行手术的术间
-        for application in total_applications:
-            self.logger.info("当前待排申请{}".format(application))
-            unavailable_rooms[application['id']] = list(set(set_k) - set(self.sio.get_available_rooms(application)))
-            self.logger.info("是否在第一阶段固定:" + str(whether_arranged[application['id']]))
-
-            if not whether_arranged[application['id']]: # 已经安排了，则不显示可行术间
-                self.logger.info("可行术间：")
-                for _ in list(set(set_k) - set(unavailable_rooms[application['id']])):
-                    self.logger.info(str(self.sio.get_room_info_from_id(_)))
-
-            para_ij[application['surgeon_code']][application['id']] = 1
-            para_mj[application['apply_dept']][application['id']] = 1
-
-        for j in set_j:
-            # self.logger.info("手术编号", j, "不可行术间", unavailable_rooms[j], "是否在第一阶段固定", whether_arranged[j])
-            if whether_arranged[j] == 0:
-                model += (pulp.lpSum([var_jk[j][k] for k in unavailable_rooms[j]]) == 0,
-                          'ConditionOf' + 'Surgery' + str(j))
-
-        # 添加【约束】：手术至多安排在一个手术间里
-        for j in set_j:
-            model += (pulp.lpSum([var_jk[j][k] for k in set_k]) <= 1,
-                      'AtMostOneRoomFor' + 'Surgery' + str(j))
-
-        # 添加【约束】：第一阶段的手术固定在之前的术间
-        for application in arranged_applications:
-            room_id = application['arranged_room_id']
-            startTime_k[str(room_id)] += application["duration"] + 0.5
-            arranged_room_depts[str(room_id)].append(application['apply_dept'])
-            arranged_dept_rooms[application['apply_dept']].append(str(room_id))
-            arranged_doc_roomDepts[application['surgeon_code']].append(total_room_info[int(room_id)][0])
-
-            model += (var_jk[application['id']][str(room_id)] == 1,
-                      'Arranged' + 'Surgery' + str(application['id']))
-
-        # 添加【约束】：每个手术间的用时不超过12小时（如果已经超了，就不超过当前值）
-        for k in set_k:
-            model += (pulp.lpSum([var_jk[j][k] * (time_j[j] + 0.5) for j in set_j]) <=
-                      max(12.5, startTime_k[k]), 'TotalTimeOf' + 'Room' + str(k))
-
-        for m in set_m:
-            # 添加【约束】：定义var_mk（表示：手术间k是否排了科室m的手术）
-            for k in set_k:
-                model += pulp.lpSum([var_jk[j][k] * para_mj[m][j] for j in set_j]) \
-                         <= 100 * var_mk[m][k], 'DefineVarOf' + 'Dept' + str(m) + 'Room' + str(k) + '1'
-                model += pulp.lpSum([var_jk[j][k] * para_mj[m][j] for j in set_j]) \
-                         >= var_mk[m][k], 'DefineVarOf' + 'Dept' + str(m) + 'Room' + str(k) + '2'
-
-        for k in set_k:
-            # 添加【约束】：一个手术间里的手术不能来自超过【3】个科室（如果已经超了，就不超过当前值）
-            model += pulp.lpSum([var_mk[m][k] for m in set_m]) \
-                     <= max(3, len(set(arranged_room_depts[k]))), 'ConstrOfDeptFor' + 'Room' + str(k)
-
-        for m in set_m:
-            # 添加【约束】：一个科室的手术不能分到超过【3】个手术间（如果已经超了，就不超过当前值）
-            model += pulp.lpSum([var_mk[m][k] for k in set_k]) \
-                     <= max(3, len(set(arranged_dept_rooms[m]))), 'ConstrOfRoomFor' + 'Dept' + str(m)
-
-        for i in set_i:
-            # 添加【变量】：var_i
-            var_i[i] = pulp.LpVariable(
-                cat=pulp.LpBinary, name='VariableFor' + 'Doctor' + str(i))
-            for k in set_k:
-                # 添加【约束】：定义var_ik（表示：手术间k是否排了医生i的手术）
-                model += pulp.lpSum([var_jk[j][k] * para_ij[i][j] for j in set_j]) \
-                         <= 100 * var_ik[i][k], 'DefineVarOf' + 'Doctor' + str(i) + 'Room' + str(k) + '1'
-                model += pulp.lpSum([var_jk[j][k] * para_ij[i][j] for j in set_j]) \
-                         >= var_ik[i][k], 'DefineVarOf' + 'Doctor' + str(i) + 'Room' + str(k) + '2'
-
-                # 添加【约束】：定义var_ik_2（表示：医生i在二轮是否在手术间k排了手术）
-                model += pulp.lpSum([var_jk[j][k] * para_ij[i][j] * (1 - whether_arranged[j]) for j in set_j]) \
-                         <= 100 * var_ik_2[i][k], \
-                         'DefineVar222Of' + 'Doctor' + str(i) + 'Room' + str(k) + '1'
-                model += pulp.lpSum([var_jk[j][k] * para_ij[i][j] * (1 - whether_arranged[j]) for j in set_j]) \
-                         >= var_ik_2[i][k], \
-                         'DefineVar222Of' + 'Doctor' + str(i) + 'Room' + str(k) + '2'
-
-            # 添加【约束】：医生i的排上的手术的总时长如果不超过4小时，
-            # 那么var_i[i] == 0，否则var_i[i] == 1
-            # 那么医生i的手术就至多只能排到1个手术间里
-            model += (pulp.lpSum([para_ij[i][j] * var_jk[j][k] * time_j[j] for j in set_j
-                                  for k in set_k]) <= 4 + 100 * (1 - var_i[i]))
-            model += (pulp.lpSum([para_ij[i][j] * var_jk[j][k] * time_j[j]
-                                  for j in set_j
-                                  for k in set_k]) - 4 >= -100 * (1 - var_i[i]),
-                      'Constr111DefineVar_iForDoctor' + str(i) + '2')
-            # 添加【约束】：医生i的排上的手术的数量如果不超过3个，
-            # 那么医生i的手术就至多只能排到1个手术间里
-            # 那么var_i[i] == 0, 否则var_i[i] == 1
-            model += (pulp.lpSum([para_ij[i][j] * var_jk[j][k]
-                                  for j in set_j
-                                  for k in set_k]) <= 3 + 100 * (1 - var_i[i]),
-                      'Constr222DefineVar_iForDoctor' + str(i) + '1')
-            model += (pulp.lpSum([para_ij[i][j] * var_jk[j][k]
-                                  for j in set_j
-                                  for k in set_k]) - 3 >= -100 * (1 - var_i[i]),
-                      'Constr222DefineVar_iForDoctor' + str(i) + '2')
-
-            # 添加【约束】：如果var_i[i]为0，那么医生i在二轮排上的手术不能排在2个及以上的手术间里
-            model += pulp.lpSum([var_ik_2[i][k] for k in set_k]) <= 1 + 100 * var_i[i]
-
-        # 添加【约束】：定义var_in（表示：医生i的手术是否安排在手术部n）
-        for i in set_i:
-            for n in set_n:
-                model += pulp.lpSum([var_ik[i][k] for k in list_nk[n]]) \
-                         <= 100 * var_in[i][n], 'DefineVarOf' + 'Doctor' + str(i) + 'Room_Dept' + str(n) + '1'
-                model += pulp.lpSum([var_ik[i][k] for k in list_nk[n]]) \
-                         >= var_in[i][n], 'DefineVarOf' + 'Doctor' + str(i) + 'Room_Dept' + str(n) + '2'
-
-        # 添加【约束】，同一医生的手术不超过1个手术部（如果已经超了，就不超过当前值）
-        for i in set_i:
-            model += pulp.lpSum([var_in[i][n] for n in set_n]) \
-                     <= max(1, len(set(arranged_doc_roomDepts[i]))), 'ConstrOfRoom_DeptFor' + 'Doctor' + str(i)
-
-        # 【目标】最大化排上手术的总权重
-        model += pulp.lpSum([var_jk[j][k] * set_weight[j] * (1 - whether_arranged[j]) for k in set_k
-                             for j in set_j]), 'Obj'
+        # 初始化self.rooms
+        for room_id, _ in self.sio.get_total_room_info().items():
+            self.rooms[room_id] = []
         
-        self.logger.info("开始求解优化模型，时间限制为100秒")
-        solver = pulp.PULP_CBC_CMD(timeLimit=100)  # 算法运行时间不超过100秒
-        model.solve(solver)
-        # 确保模型已经成功求解
-        if pulp.LpStatus[model.status] == 'Optimal':
-            for j in set_j:
-                for k in set_k:
-                    if var_jk[j][k].varValue is not None and int(var_jk[j][k].varValue) == 1:
-                        # self.logger.info(f"var_jk[{j}][{k}] = {var_jk[j][k].varValue}")
-                        # self.logger.info(j, set_weight[j], self.sio.get_available_rooms(j))
-                        # self.logger.info("是否在第一阶段已固定", whether_arranged[j])
-                        pass
-            for k in set_k:
-                # self.logger.info("术间", k, "总用时", sum(int(var_jk[j][k].varValue) * (time_j[j] + 0.5) for j in set_j), "小时")
-                pass
-        else:
-            self.logger.info("Model did not solve to optimality.")
-        for k in set_k:
-            self.room_surgery[k] = []
-            for app in total_applications:
-                if int(var_jk[app['id']][k].varValue) == 1:
-                    app["arranged_status"] = ARRANGED_STATUS if app["arranged_status"] == 0 else app["arranged_status"]
-                    self.room_surgery[k].append(app)
+        # 将arranged_applications中的手术加入到self.rooms中
+        for app in arranged_applications:
+            if int(app['arranged_room_id']) not in self.rooms:
+                raise ValueError(f"手术{app['id']}的手术室{app['arranged_room_id']}不在白名单中")
+            self.rooms[int(app['arranged_room_id'])].append(app)
+
+        for room_id, applications in self.rooms.items():
+            room_info = self.sio.get_room_info_from_id(room_id)
+            self.logger.info(f"手术室{room_info}的手术数为{len(applications)}总时长为{self.__get_room_workload(room_id)}")
+        
+        # 区分特殊手术和非特殊手术
+        spec_unarranged_applications = []
+        non_spec_unarranged_applications = []
+        for app in unarranged_applications:
+            if app['is_sp_robot'] or app['is_sp_intervention'] or app['is_sp_perspective'] or app['is_sp_holmium'] or app['is_infected_air']:
+                spec_unarranged_applications.append(app)
+            else:
+                non_spec_unarranged_applications.append(app)
+        """
+        安排特殊手术，找到其可行手术室，定义使用时长最小的手术室为最优手术室
+        如果最优手术室已经超过工作量，则跳过当前手术
+        如果最优手术室没有超过工作量，则将当前手术安排到最优手术室
+        """
+        for app in spec_unarranged_applications:
+            available_room_ids = [int(_) for _ in self.sio.get_available_rooms(app)]
+            if len(available_room_ids) == 0:
+                self.logger.warning(f"特殊手术{app['id']}没有可用的手术室")
+                continue
+            best_room_id = min(available_room_ids, key=lambda x: self.__get_room_workload(x))
+            # 尝试将当前手术加入到最优手术室
+            self.rooms[best_room_id].append(app)
+            if self.__check_room_overwork(best_room_id):
+                # 手术室已经超过工作量，弹出当前手术
+                self.rooms[best_room_id].pop()
+                self.logger.warning(f"特殊手术{app['id']}最为合适的手术室{best_room_id}已经超过工作量，跳过当前手术")
+                self.sio.update_unscheduled_reason(app['id'], f"特殊手术{app['id']}最为合适的手术室{best_room_id}已经超过工作量，跳过当前手术")
+                continue
+            # 安排成功
+            app['arranged_status'] = ARRANGED_STATUS
+            app['arranged_room_id'] = best_room_id
+            self.logger.info(f"特殊手术{app['id']}安排到手术室{best_room_id}，手术室{best_room_id}的手术数为{len(self.rooms[best_room_id])}")
+
 
         # 排序
-        for k in set_k:
-            for app in self.room_surgery[k]:
+        for room_id, applications in self.rooms.items():
+            for app in applications:
                 assert app["is_infected_hiv"] in [0, 1], "手术{}的感染状态非法".format(app)
                 assert app["arranged_status"] in [0, 1, 2, 3], "未知手术排程状态{}".format(app["arranged_status"])
 
                 if app["arranged_status"] == ARRANGED_STATUS:
                     app['arranged_start_time'] = datetime.max
-                    if k in unavailable_rooms[app['id']]:
-                        self.logger.error("{}在排班中不可排到该手术室集{}".format(app, unavailable_rooms[app['id']]))
+
                 else:
                     assert isinstance(app['arranged_start_time'], datetime), "手术{}的开始时间非法".format(app)
                     assert isinstance(app['arranged_end_time'], datetime), "手术{}的结束时间非法".format(app)
 
-            self.room_surgery[k].sort(key=lambda x: (
+            self.rooms[room_id].sort(key=lambda x: (
                 x['arranged_start_time'],
                 x.get('surgeon_code', ''),
                 x.get('is_infected_hiv', 0),
                 x.get('incision_size', float('inf'))
             ))
+
+
         # 二阶段排好的结果
         res_2 = []
-
         stage_1st_finished = []
         stage_2st_finished = []
         stage_3st_finished = []
 
-
-        for room_id, applications in self.room_surgery.items():
+        for room_id, applications in self.rooms.items():
             # 每个手术室从8:00开始,转换为datetime.time
             clock = datetime.strptime(self.schedule_date + " 08:00:00", "%Y-%m-%d %H:%M:%S")
 
