@@ -3,10 +3,55 @@ from datetime import datetime, timedelta
 from common.logger import Logger
 from surgery_brain.scheduleIO import ScheduleIO
 import pandas as pd
-import pulp
+from typing import Tuple,List,Dict
+from collections import defaultdict
 
+class Cluster:
+    """
+    二阶段排程的过程中的一些手术的集合，同一个集合的手术的有相同的（申请科室+台序字母）
+    例如，泌尿外科-A就是一个Cluster
+    """
+    def __init__(self, sio:ScheduleIO,applications:List[Dict]) -> None:
+        self.applications:List[Dict] = applications
+        self.cluster_name:Tuple[str,str] = self.__init_cluster_name()
+        self.weight2:float = self.__init_weight2()
+        self.sio = sio
 
+    def __init_cluster_name(self)->Tuple[str,str]:
+        """
+        获取当前手术簇的名称
+        """
+        assert len(self.applications) > 0, "手术簇不能为空"
+        apply_dept = self.applications[0]['apply_dept']
+        seq_alphabet = self.applications[0]['seq_alphabet']
+        for app in self.applications:
+            if app['apply_dept'] != apply_dept or app['seq_alphabet'] != seq_alphabet:
+                raise ValueError(f"手术簇中的手术{app['id']}的申请科室或台序字母与第一个手术不同")
+        return (apply_dept,seq_alphabet)
 
+    def __init_weight2(self)->float:
+        """
+        获取当前手术簇的权重
+        """
+        weight2 = 0.0
+        for app in self.applications:
+            weight2 += app['weight2']
+        return weight2
+
+    def __lt__(self,other:'Cluster')->bool:
+        return self.weight2 < other.weight2
+    
+    def __repr__(self) -> str:
+        return f"手术簇：{self.cluster_name[0]}-{self.cluster_name[1]}，手术数：{len(self)}，权重：{self.weight2}"
+
+    def __len__(self)->int:
+        return len(self.applications)
+
+    def get_available_room_ids(self)->List[int]:
+        """
+        获取当前手术簇的可行手术室
+        """
+        return [int(_) for _ in self.sio.get_available_rooms(self.applications[0])]
 
 class Schedule():
     def __init__(self, schedule_date):
@@ -293,6 +338,7 @@ class Schedule():
         如果最优手术室已经超过工作量，则跳过当前手术
         如果最优手术室没有超过工作量，则将当前手术安排到最优手术室
         """
+        self.logger.info("开始安排特殊手术")
         for app in spec_unarranged_applications:
             available_room_ids = [int(_) for _ in self.sio.get_available_rooms(app)]
             if len(available_room_ids) == 0:
@@ -305,14 +351,53 @@ class Schedule():
                 # 手术室已经超过工作量，弹出当前手术
                 self.rooms[best_room_id].pop()
                 self.logger.warning(f"特殊手术{app['id']}最为合适的手术室{best_room_id}已经超过工作量，跳过当前手术")
-                self.sio.update_unscheduled_reason(app['id'], f"特殊手术{app['id']}最为合适的手术室{best_room_id}已经超过工作量，跳过当前手术")
+                self.sio.update_unscheduled_reason(app['id'], f"特殊手术{app['id']}最为合适的手术室{best_room_id}已经超过工作量，跳过当前手术",append=True)
                 continue
             # 安排成功
             app['arranged_status'] = ARRANGED_STATUS
             app['arranged_room_id'] = best_room_id
             self.logger.info(f"特殊手术{app['id']}安排到手术室{best_room_id}，手术室{best_room_id}的手术数为{len(self.rooms[best_room_id])}")
+        self.logger.info("特殊手术安排完成")
+        """
+        安排非特殊手术，找到其可行手术室
+        首先将非特殊手术按照申请科室和台序字母进行分组，每个组为一个手术簇
+        每个簇的权重为：所有手术的权重之和
+        将这些cluster放到sorted_clusters中，按照标准是：
+        - 骨科优先
+        - 权重越大越优先
 
+        每次从sorted_clusters中取出一个cluster，尝试将其安排到手术室
+        如果cluster中所有手术的可行手术室都超过工作量，则跳过当前cluster
+        如果cluster中所有手术的可行手术室都未超过工作量，则将当前cluster安排到可行手术室中使用时长最小的手术室
+        """
+        self.logger.info("开始安排非特殊手术")
+        cluster_name_to_apps = defaultdict(list)
+        for app in non_spec_unarranged_applications:
+            cluster_name_to_apps[(app['apply_dept'],app['seq_alphabet'])].append(app)
+        sorted_clusters = [Cluster(self.sio,apps) for apps in cluster_name_to_apps.values()] 
+        sorted_clusters.sort(key=lambda x: ("骨科" in x.cluster_name[0] ,-x.weight2))
+        for cluster in sorted_clusters:
+            self.logger.info(f"当前手术簇{cluster}包含的手术为如下：")
+            for app in cluster.applications:
+                self.logger.info(f"\t{app['id']}")
+        while sorted_clusters:
+            cluster = sorted_clusters.pop()
+            available_room_ids = cluster.get_available_room_ids()
+            best_room_id = min(available_room_ids, key=lambda x: self.__get_room_workload(x))
+            self.rooms[best_room_id].extend(cluster.applications)
+            if self.__check_room_overwork(best_room_id):
+                self.rooms[best_room_id] = self.rooms[best_room_id][:-len(cluster.applications)]
+                for app in cluster.applications:
+                    self.sio.update_unscheduled_reason(app['id'], f"{cluster}安排到手术室{best_room_id}后，手术室{best_room_id}已经超过工作量，跳过当前手术簇",append=True)
+                self.logger.warning(f"{cluster}安排到手术室{best_room_id}后，手术室{best_room_id}已经超过工作量，跳过当前手术簇")
+                continue
+            for app in cluster.applications:
+                app['arranged_status'] = ARRANGED_STATUS
+                app['arranged_room_id'] = best_room_id
+                self.logger.info(f"手术簇{cluster}安排到手术室{best_room_id}，手术室{best_room_id}的手术数为{len(self.rooms[best_room_id])}")
+            self.logger.info(f"手术簇{cluster}安排完成")
 
+        self.logger.info("非特殊手术安排完成")
         # 排序
         for room_id, applications in self.rooms.items():
             for app in applications:
@@ -363,18 +448,6 @@ class Schedule():
                 else:
                     raise ValueError("手术排程状态（arranged_status）异常，异常申请为{}".format(application))
 
-        # 填写未排程的申请的原因
-        stage_1st_finished_ids = [_["id"] for _ in stage_1st_finished]
-        stage_2st_finished_ids = [_["id"] for _ in stage_2st_finished]
-        stage_3st_finished_ids = [_["id"] for _ in stage_3st_finished]
-        for app in total_applications:
-            if app["id"] not in stage_1st_finished_ids and app["id"] not in stage_2st_finished_ids and app["id"] not in stage_3st_finished_ids:
-                self.logger.warning("申请{}未被排程".format(app))
-                _ = {
-                    2: "一",
-                    3: "二",
-                }
-                self.sio.update_unscheduled_reason(app['id'], f"该手术第{_[ARRANGED_STATUS]}次抢单排程未成功（可能原因多样）", append=True)
 
         self.logger.info(f"排好结果汇总完成，申请数为{len(total_applications)}")
         self.logger.info(f"第一阶段完成数{len(stage_1st_finished)}")
