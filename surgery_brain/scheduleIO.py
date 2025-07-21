@@ -570,8 +570,8 @@ class ScheduleIO():
               ssr.whether_can_operation AND mapping_name = '{}'
             """.format(sp_name)
             available_rooms = [row['operating_room_id'] for row in query_all_dict(sql)]
-
-        return available_rooms
+        # 过滤掉不在白名单中的手术室,特殊手术和非特殊手术的约束表中存在不是白名单的手术室，e.g. 2597 对应二部06，不纳入考虑
+        return [str(room_id) for room_id in available_rooms if int(room_id) in self.get_total_room_info().keys()]
 
     def write_result_to_db(self, applications):
         """
