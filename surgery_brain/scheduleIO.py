@@ -681,13 +681,18 @@ class ScheduleIO():
 
         # drop some data
         if drop_ratio > 0:
-            df_python = df_python.sample(frac=1 - drop_ratio)
+            df_remain = df_python.sample(frac=1 - drop_ratio,random_state=42)
+            df_dropped = df_python.drop(df_remain.index)
+
+        else:
+            df_remain = df_python
+            df_dropped = pd.DataFrame()
 
         # write to surgicalapplicationinfo
-        df_python.to_sql('surgicalapplicationinfo', self.sqlalchemy_engine, if_exists='replace', index=False)
+        df_remain.to_sql('surgicalapplicationinfo', self.sqlalchemy_engine, if_exists='replace', index=False)
 
-        # update surgicalapplicationinfo_port scheduling_state as df_python arranged_status
-        for row in df_python.itertuples():
+        # update surgicalapplicationinfo_port scheduling_state as df_remain arranged_status
+        for row in df_remain.itertuples():
             sql = """
                 update surgicalapplication_info_port
                 set 
@@ -695,6 +700,15 @@ class ScheduleIO():
                 where
                     ELECTR_REQUISITION_NO = '{}'
             """.format(row.arranged_status, row.application_number)
+            execute_sql(sql)
+        for row in df_dropped.itertuples():
+            sql = """
+                update surgicalapplication_info_port
+                set 
+                    scheduling_state = 0
+                where
+                    ELECTR_REQUISITION_NO = '{}'
+            """.format(row.application_number)
             execute_sql(sql)
 
     def reset_info_port(self):
