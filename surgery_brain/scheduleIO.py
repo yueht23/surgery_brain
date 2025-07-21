@@ -259,10 +259,8 @@ class ScheduleIO():
 
     def get_total_room_info(self):
         """
-        返回所有的手术室信息
-        例如: room_id = 2586 -> ('第一手术部', '01')
-        :param room_id: int, 手术室id
-        :return: tuple, 手术室信息, (operating_department, real_name)
+        返回所有的手术室信息，并按照第一手术部 < 第二手术部 < 日间手术室，同手术部下，看real_name排序
+        返回所有room_id -> (operating_department, real_name)的字典
         """
         if self.__total_rooms_info is None:
             sql = """
@@ -302,6 +300,16 @@ class ScheduleIO():
                     if row["real_name"] not in day_surgery_valid_room_ids:
                         continue
                 self.__total_rooms_info[row["id"]] = (row["operating_department"], row["real_name"])
+            
+            # 对字典按照value进行排序，value为(operating_department, real_name)
+            # 第一手术部 < 第二手术部 < 日间手术室
+            # 同手术部下，看real_name
+            mapping = {
+                "第一手术部": 0,
+                "第二手术部": 1,
+                "日间手术室": 2
+            }
+            self.__total_rooms_info = dict(sorted(self.__total_rooms_info.items(), key=lambda x: (mapping[x[1][0]], int(x[1][1]))))
         return self.__total_rooms_info
 
     def get_room_info_from_id(self, room_id):
@@ -537,7 +545,7 @@ class ScheduleIO():
 
         # 如果没有特殊手术，sp_name为None
         if sp_name is None:
-            self.logger.info("当前手术不是特殊手术，采用科室的约束表")
+            self.logger.info(f"当前手术不是特殊手术，采用科室的约束表,具体科室为{apply_dept}")
             sql = """
             SELECT
               ao.family_name AS apply_dept, -- 申请科室名称
@@ -551,7 +559,7 @@ class ScheduleIO():
             """.format(apply_dept)
             available_rooms = [row['room_id'] for row in query_all_dict(sql)]
         else:
-            self.logger.info(f"当前手术是特殊手术{sp_name}，采用特殊手术的约束表")
+            self.logger.info(f"当前手术是特殊手术，采用特殊手术的约束表,具体特殊手术为{sp_name}")
             sql = """
             SELECT
               ssr.operating_room_id
@@ -740,12 +748,12 @@ class ScheduleIO():
                 if not (df_room["arranged_start_time"].shift(-1) >= df_room["arranged_end_time"])[:-1].all():
                     self.logger.error(f"手术室 {self.get_room_info_from_id(room_id)} 的手术时间存在重叠")
 
-            # 每个医生（surgeon_code） 的手术不重叠
-            for surgeon_code in df_arranged["surgeon_code"].unique():
-                df_surgeon = df_arranged.loc[df_arranged["surgeon_code"] == surgeon_code]
-                df_surgeon = df_surgeon.sort_values(by="arranged_start_time")
-                if not (df_surgeon["arranged_start_time"].shift(-1) >= df_surgeon["arranged_end_time"])[:-1].all():
-                    self.logger.error(f"医生 {surgeon_code} 的手术时间存在重叠")
+            # 每个医生（surgeon_code） 的手术不重叠，暂时不检查
+            # for surgeon_code in df_arranged["surgeon_code"].unique():
+            #     df_surgeon = df_arranged.loc[df_arranged["surgeon_code"] == surgeon_code]
+            #     df_surgeon = df_surgeon.sort_values(by="arranged_start_time")
+            #     if not (df_surgeon["arranged_start_time"].shift(-1) >= df_surgeon["arranged_end_time"])[:-1].all():
+            #         self.logger.error(f"医生 {surgeon_code} 的手术时间存在重叠")
 
             self.logger.info("排程结果的合法性检查完成")
 

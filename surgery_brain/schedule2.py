@@ -42,7 +42,7 @@ class Cluster:
         return self.weight2 < other.weight2
     
     def __repr__(self) -> str:
-        return f"手术簇：{self.cluster_name[0]}-{self.cluster_name[1]}，手术数：{len(self)}，权重：{self.weight2}"
+        return f"手术簇：{self.cluster_name[0]}-{self.cluster_name[1]}，手术数：{len(self)}，权重：{self.weight2:.3f}"
 
     def __len__(self)->int:
         return len(self.applications)
@@ -137,9 +137,6 @@ class Schedule():
 
         self.logger.info("二阶段权重构造")
         for application in total_applications:
-            self.logger.info("")
-            self.logger.info("当前待排申请{}".format(application))
-
             # 用于记录各项权重的构成
             # key:子项权重->val:该子项权重的权重
             weight2 = dict()
@@ -156,10 +153,10 @@ class Schedule():
             # 日间手术
             if application["is_day_surgery"]:
                 weight2["is_day_surgery"] = 3
-                weight2["day_percentage"] = application.get("day_percentage", 0)
+                weight2["day_percentage"] = round(application.get("day_percentage", 0), 3)
             # 择期手术
             else:
-                weight2["elective_percentage"] = application.get("elective_percentage", 0)
+                weight2["elective_percentage"] = round(application.get("elective_percentage", 0), 3)
 
             # 国考四级手术
             weight2["surgery_level"] = 3 if application["surgery_level"] == "4" else 0
@@ -170,9 +167,9 @@ class Schedule():
             # 微创优先非微创
             weight2["is_mini_invasive"] = 3 if application["is_mini_invasive"] else 0
 
-            application["weight2"] = sum(weight2.values())
-            self.logger.info("当前申请的总权重为{}".format(application["weight2"]))
-            self.logger.info("当前申请的权重的构成为{}".format(weight2))
+            application["weight2"] = round(sum(weight2.values()), 3)
+            self.logger.info(f"手术{application['id']}的总权重为{application['weight2']}，权重构成为{str(weight2)}")
+
 
     def schedule_first(self):
         """
@@ -312,10 +309,11 @@ class Schedule():
 
 
         # 初始化self.rooms
+        self.rooms = dict()
         for room_id, _ in self.sio.get_total_room_info().items():
             self.rooms[room_id] = []
         
-        # 将arranged_applications中的手术加入到self.rooms中
+        # 将arranged_applications中的手术加入到self.rooms中,并可视化self.rooms的占用情况
         for app in arranged_applications:
             if int(app['arranged_room_id']) not in self.rooms:
                 raise ValueError(f"手术{app['id']}的手术室{app['arranged_room_id']}不在白名单中")
@@ -323,7 +321,7 @@ class Schedule():
 
         for room_id, applications in self.rooms.items():
             room_info = self.sio.get_room_info_from_id(room_id)
-            self.logger.info(f"手术室{room_info}的手术数为{len(applications)}总时长为{self.__get_room_workload(room_id)}")
+            self.logger.info(f"手术室{room_info}的手术数为{len(applications):02d}，总时长为{self.__get_room_workload(room_id):05.1f}|" + "*"*int(self.__get_room_workload(room_id)))
         
         # 区分特殊手术和非特殊手术
         spec_unarranged_applications = []
@@ -338,25 +336,27 @@ class Schedule():
         如果最优手术室已经超过工作量，则跳过当前手术
         如果最优手术室没有超过工作量，则将当前手术安排到最优手术室
         """
-        self.logger.info("开始安排特殊手术")
+        self.logger.info(f"开始安排特殊手术，特殊手术数为{len(spec_unarranged_applications)}")
         for app in spec_unarranged_applications:
             available_room_ids = [int(_) for _ in self.sio.get_available_rooms(app)]
             if len(available_room_ids) == 0:
                 self.logger.warning(f"特殊手术{app['id']}没有可用的手术室")
                 continue
             best_room_id = min(available_room_ids, key=lambda x: self.__get_room_workload(x))
+            best_room_info_str = self.sio.get_room_info_from_id(best_room_id)[0] + "|" + self.sio.get_room_info_from_id(best_room_id)[1]
+
             # 尝试将当前手术加入到最优手术室
             self.rooms[best_room_id].append(app)
             if self.__check_room_overwork(best_room_id):
                 # 手术室已经超过工作量，弹出当前手术
                 self.rooms[best_room_id].pop()
-                self.logger.warning(f"特殊手术{app['id']}最为合适的手术室{best_room_id}已经超过工作量，跳过当前手术")
-                self.sio.update_unscheduled_reason(app['id'], f"特殊手术{app['id']}最为合适的手术室{best_room_id}已经超过工作量，跳过当前手术",append=True)
+                self.logger.warning(f"特殊手术{app['id']}最为合适的手术室{best_room_info_str}已经超过工作量，跳过当前手术")
+                self.sio.update_unscheduled_reason(app['id'], f"特殊手术{app['id']}最为合适的手术室{best_room_info_str}已经超过工作量，跳过当前手术",append=True)
                 continue
             # 安排成功
             app['arranged_status'] = ARRANGED_STATUS
             app['arranged_room_id'] = best_room_id
-            self.logger.info(f"特殊手术{app['id']}安排到手术室{best_room_id}，手术室{best_room_id}的手术数为{len(self.rooms[best_room_id])}")
+            self.logger.info(f"特殊手术{app['id']}安排到手术室{best_room_info_str}，手术室{best_room_info_str}的手术数为{len(self.rooms[best_room_id])}")
         self.logger.info("特殊手术安排完成")
         """
         安排非特殊手术，找到其可行手术室
@@ -370,7 +370,7 @@ class Schedule():
         如果cluster中所有手术的可行手术室都超过工作量，则跳过当前cluster
         如果cluster中所有手术的可行手术室都未超过工作量，则将当前cluster安排到可行手术室中使用时长最小的手术室
         """
-        self.logger.info("开始安排非特殊手术")
+        self.logger.info(f"开始安排非特殊手术，非特殊手术数为{len(non_spec_unarranged_applications)}")
         cluster_name_to_apps = defaultdict(list)
         for app in non_spec_unarranged_applications:
             cluster_name_to_apps[(app['apply_dept'],app['seq_alphabet'])].append(app)
@@ -384,17 +384,19 @@ class Schedule():
             cluster = sorted_clusters.pop()
             available_room_ids = cluster.get_available_room_ids()
             best_room_id = min(available_room_ids, key=lambda x: self.__get_room_workload(x))
+            best_room_info_str = self.sio.get_room_info_from_id(best_room_id)[0] + "|" + self.sio.get_room_info_from_id(best_room_id)[1]
             self.rooms[best_room_id].extend(cluster.applications)
             if self.__check_room_overwork(best_room_id):
                 self.rooms[best_room_id] = self.rooms[best_room_id][:-len(cluster.applications)]
+                self.logger.warning(f"{cluster}安排到手术室{best_room_info_str}后，手术室{best_room_info_str}已经超过工作量，跳过当前手术簇")
                 for app in cluster.applications:
-                    self.sio.update_unscheduled_reason(app['id'], f"{cluster}安排到手术室{best_room_id}后，手术室{best_room_id}已经超过工作量，跳过当前手术簇",append=True)
-                self.logger.warning(f"{cluster}安排到手术室{best_room_id}后，手术室{best_room_id}已经超过工作量，跳过当前手术簇")
+                    self.sio.update_unscheduled_reason(app['id'], f"{cluster}安排到手术室{best_room_info_str}后，手术室{best_room_info_str}已经超过工作量，跳过当前手术簇",append=True)
                 continue
+
+            self.logger.info(f"手术簇{cluster}安排到手术室{best_room_info_str}，手术室{best_room_info_str}的手术数为{len(self.rooms[best_room_id])}")
             for app in cluster.applications:
                 app['arranged_status'] = ARRANGED_STATUS
                 app['arranged_room_id'] = best_room_id
-                self.logger.info(f"手术簇{cluster}安排到手术室{best_room_id}，手术室{best_room_id}的手术数为{len(self.rooms[best_room_id])}")
             self.logger.info(f"手术簇{cluster}安排完成")
 
         self.logger.info("非特殊手术安排完成")
