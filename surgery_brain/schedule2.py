@@ -318,6 +318,8 @@ class Schedule():
             if int(app['arranged_room_id']) not in self.rooms:
                 raise ValueError(f"手术{app['id']}的手术室{app['arranged_room_id']}不在白名单中")
             self.rooms[int(app['arranged_room_id'])].append(app)
+            arranged_room_info_str = self.sio.get_room_info_from_id(int(app['arranged_room_id']))[0] + "|" + self.sio.get_room_info_from_id(int(app['arranged_room_id']))[1]
+            self.logger.info(f"{arranged_room_info_str}中安排了手术{str(app)}")
 
         for room_id, applications in self.rooms.items():
             room_info = self.sio.get_room_info_from_id(room_id)
@@ -336,7 +338,10 @@ class Schedule():
         如果最优手术室已经超过工作量，则跳过当前手术
         如果最优手术室没有超过工作量，则将当前手术安排到最优手术室
         """
-        self.logger.info(f"开始安排特殊手术，特殊手术数为{len(spec_unarranged_applications)}")
+        self.logger.info(f"特殊手术数为{len(spec_unarranged_applications)},具体手术如下：")
+        for app in spec_unarranged_applications:
+            self.logger.info(f"特殊手术{str(app)}")
+        self.logger.info("开始安排特殊手术")
         for app in spec_unarranged_applications:
             available_room_ids = [int(_) for _ in self.sio.get_available_rooms(app)]
             if len(available_room_ids) == 0:
@@ -370,12 +375,15 @@ class Schedule():
         如果cluster中所有手术的可行手术室都超过工作量，则跳过当前cluster
         如果cluster中所有手术的可行手术室都未超过工作量，则将当前cluster安排到可行手术室中使用时长最小的手术室
         """
-        self.logger.info(f"开始安排非特殊手术，非特殊手术数为{len(non_spec_unarranged_applications)}")
+        self.logger.info(f"非特殊手术数为{len(non_spec_unarranged_applications)}，具体手术如下：")
+        for app in non_spec_unarranged_applications:
+            self.logger.info(f"非特殊手术{str(app)}")
+        self.logger.info("开始安排非特殊手术")
         cluster_name_to_apps = defaultdict(list)
         for app in non_spec_unarranged_applications:
             cluster_name_to_apps[(app['apply_dept'],app['seq_alphabet'])].append(app)
         sorted_clusters = [Cluster(self.sio,apps) for apps in cluster_name_to_apps.values()] 
-        sorted_clusters.sort(key=lambda x: ("骨科" in x.cluster_name[0] ,-x.weight2))
+        sorted_clusters.sort(key=lambda x: ("骨科" in x.cluster_name[0] ,-x.weight2),reverse=True)
         for cluster in sorted_clusters:
             self.logger.info(f"当前手术簇{cluster}包含的手术为如下：")
             for app in cluster.applications:
